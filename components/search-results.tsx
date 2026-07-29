@@ -1,9 +1,10 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { SlidersHorizontal, SearchX } from "lucide-react"
-import { mockCourses, type Course } from "@/lib/mock-data"
+import type { Course, Requirement } from "@/lib/mock-data"
+import { searchCourses, type FieldMatchGroup } from "@/lib/api/search"
 import { CourseCard } from "@/components/course-card"
 
 type SortKey = "relevance" | "rating" | "reviews"
@@ -14,20 +15,31 @@ const sortOptions: { key: SortKey; label: string }[] = [
   { key: "reviews", label: "리뷰많은순" },
 ]
 
-const creditOptions = ["전체", "1학점", "2학점", "3학점"]
+const creditOptions = ["전체", "1", "2", "3"]
+// 학년(1~4학년) 필터는 PRD 8.2가 요구하는 필터 항목이지만, courses 테이블(lib/db/schema.ts)과
+// mock-data.ts/curriculum-data.ts 어디에도 학년을 나타내는 원본 데이터가 없다(전 카탈로그
+// 공통의 알려진 데이터 공백 — docs/DEVELOPMENT_PLAN.md Sprint 2 메모 참고). 데이터가 없는데
+// 필터가 동작하는 것처럼 보이면 사용자를 오도하므로, 선택지는 노출하되 비활성화해 정직하게
+// "아직 지원하지 않음"을 표시한다.
 const gradeOptions = ["전체", "1학년", "2학년", "3학년", "4학년"]
-const requirementOptions = ["전체", "전공필수", "전공선택", "교양"]
+const requirementOptions: ("전체" | Requirement)[] = ["전체", "전공필수", "전공선택", "교양"]
+const ratingOptions = ["전체", "4.5", "4.0", "3.5"]
 
-function matchesField(course: Course, q: string): boolean {
-  const haystack = [
-    course.industry ?? "",
-    course.academicField ?? "",
-    ...course.hashtags.map((h) => h.tag),
-    course.department,
-  ]
-    .join(" ")
-    .toLowerCase()
-  return haystack.includes(q.toLowerCase())
+type Filters = {
+  credit: string
+  requirement: "전체" | Requirement
+  department: string
+  minRating: string
+}
+
+function applyFilters(list: Course[], filters: Filters): Course[] {
+  return list.filter((c) => {
+    if (filters.credit !== "전체" && c.credits !== Number(filters.credit)) return false
+    if (filters.requirement !== "전체" && c.requirement !== filters.requirement) return false
+    if (filters.department !== "전체" && c.department !== filters.department) return false
+    if (filters.minRating !== "전체" && c.rating < Number(filters.minRating)) return false
+    return true
+  })
 }
 
 function sortCourses(list: Course[], sort: SortKey): Course[] {
@@ -44,23 +56,58 @@ export function SearchResults() {
   const [sort, setSort] = useState<SortKey>("relevance")
   const [credit, setCredit] = useState("전체")
   const [grade, setGrade] = useState("전체")
-  const [requirement, setRequirement] = useState("전체")
+  const [requirement, setRequirement] = useState<"전체" | Requirement>("전체")
+  const [department, setDepartment] = useState("전체")
+  const [minRating, setMinRating] = useState("전체")
 
-  const { nameMatches, fieldMatches, fieldLabel } = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const nameMatches = mockCourses.filter((c) =>
-      c.name.toLowerCase().includes(q),
-    )
-    const nameIds = new Set(nameMatches.map((c) => c.id))
-    const fieldMatches = mockCourses.filter(
-      (c) => !nameIds.has(c.id) && matchesField(c, q),
-    )
-    return { nameMatches, fieldMatches, fieldLabel: query.trim() }
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [nameMatches, setNameMatches] = useState<Course[]>([])
+  const [fieldGroups, setFieldGroups] = useState<FieldMatchGroup[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    // 필터는 검색어가 바뀌어도 그대로 유지하되, 새 검색 결과 집합에 없는 개설학과를 고를
+    // 수 없으므로 학과 선택만 초기화한다.
+    setDepartment("전체")
+
+    searchCourses(query).then((result) => {
+      if (cancelled) return
+      if (!result.success) {
+        setError(result.message ?? "검색 중 오류가 발생했습니다.")
+        setNameMatches([])
+        setFieldGroups([])
+      } else {
+        setNameMatches(result.nameMatches)
+        setFieldGroups(result.fieldGroups)
+      }
+      setLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
   }, [query])
 
-  const sortedName = sortCourses(nameMatches, sort)
-  const sortedField = sortCourses(fieldMatches, sort)
-  const hasResults = sortedName.length + sortedField.length > 0
+  const departmentOptions = useMemo(() => {
+    const all = [...nameMatches, ...fieldGroups.flatMap((g) => g.courses)]
+    return ["전체", ...new Set(all.map((c) => c.department))].sort((a, b) =>
+      a === "전체" ? -1 : b === "전체" ? 1 : a.localeCompare(b, "ko"),
+    )
+  }, [nameMatches, fieldGroups])
+
+  const filters: Filters = { credit, requirement, department, minRating }
+
+  const filteredSortedName = sortCourses(applyFilters(nameMatches, filters), sort)
+  const filteredFieldGroups = fieldGroups
+    .map((g) => ({ ...g, courses: sortCourses(applyFilters(g.courses, filters), sort) }))
+    .filter((g) => g.courses.length > 0)
+
+  const totalCount =
+    filteredSortedName.length + filteredFieldGroups.reduce((sum, g) => sum + g.courses.length, 0)
+  const hasAnyRawResults = nameMatches.length > 0 || fieldGroups.length > 0
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 md:px-6">
@@ -68,9 +115,11 @@ export function SearchResults() {
         <p className="text-sm text-muted-foreground">검색 결과</p>
         <h1 className="font-display text-2xl font-bold text-foreground">
           &quot;{query}&quot;
-          <span className="ml-2 text-base font-normal text-muted-foreground">
-            총 {sortedName.length + sortedField.length}개 과목
-          </span>
+          {!loading && (
+            <span className="ml-2 text-base font-normal text-muted-foreground">
+              총 {totalCount}개 과목
+            </span>
+          )}
         </h1>
       </div>
 
@@ -80,13 +129,34 @@ export function SearchResults() {
           <SlidersHorizontal className="size-4 text-primary" aria-hidden="true" />
           필터
         </span>
-        <FilterSelect label="학점" value={credit} onChange={setCredit} options={creditOptions} />
-        <FilterSelect label="학년" value={grade} onChange={setGrade} options={gradeOptions} />
+        <FilterSelect
+          label="학점"
+          value={credit}
+          onChange={setCredit}
+          options={creditOptions}
+          formatOption={(o) => (o === "전체" ? o : `${o}학점`)}
+        />
+        <FilterSelect
+          label="학년"
+          value={grade}
+          onChange={setGrade}
+          options={gradeOptions}
+          disabled
+          title="학년 정보가 있는 과목 데이터가 아직 없어 지원하지 않습니다"
+        />
         <FilterSelect
           label="이수구분"
           value={requirement}
-          onChange={setRequirement}
+          onChange={(v) => setRequirement(v as "전체" | Requirement)}
           options={requirementOptions}
+        />
+        <FilterSelect label="개설학과" value={department} onChange={setDepartment} options={departmentOptions} />
+        <FilterSelect
+          label="평점"
+          value={minRating}
+          onChange={setMinRating}
+          options={ratingOptions}
+          formatOption={(o) => (o === "전체" ? o : `${o} 이상`)}
         />
 
         <div className="ml-auto flex items-center gap-1 rounded-full bg-secondary p-1">
@@ -107,7 +177,14 @@ export function SearchResults() {
         </div>
       </div>
 
-      {!hasResults ? (
+      {loading ? (
+        <p className="mt-16 text-center text-sm text-muted-foreground">검색 중...</p>
+      ) : error ? (
+        <div className="mt-16 flex flex-col items-center gap-3 text-center">
+          <SearchX className="size-10 text-muted-foreground/50" aria-hidden="true" />
+          <p className="font-medium text-foreground">{error}</p>
+        </div>
+      ) : !hasAnyRawResults ? (
         <div className="mt-16 flex flex-col items-center gap-3 text-center">
           <SearchX className="size-10 text-muted-foreground/50" aria-hidden="true" />
           <p className="font-medium text-foreground">검색 결과가 없어요</p>
@@ -115,18 +192,29 @@ export function SearchResults() {
             다른 과목명이나 분야 키워드로 검색해보세요.
           </p>
         </div>
+      ) : totalCount === 0 ? (
+        <div className="mt-16 flex flex-col items-center gap-3 text-center">
+          <SearchX className="size-10 text-muted-foreground/50" aria-hidden="true" />
+          <p className="font-medium text-foreground">필터 조건에 맞는 과목이 없어요</p>
+          <p className="text-sm text-muted-foreground">필터를 조정해보세요.</p>
+        </div>
       ) : (
         <div className="mt-8 space-y-10">
-          {sortedName.length > 0 && (
-            <ResultSection title="과목명 일치" count={sortedName.length} courses={sortedName} />
-          )}
-          {sortedField.length > 0 && (
+          {filteredSortedName.length > 0 && (
             <ResultSection
-              title={`분야 일치: ${fieldLabel}`}
-              count={sortedField.length}
-              courses={sortedField}
+              title="과목명 일치"
+              count={filteredSortedName.length}
+              courses={filteredSortedName}
             />
           )}
+          {filteredFieldGroups.map((g) => (
+            <ResultSection
+              key={g.fieldTagId}
+              title={`분야: ${g.fieldTagName}`}
+              count={g.courses.length}
+              courses={g.courses}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -159,28 +247,35 @@ function ResultSection({
   )
 }
 
-function FilterSelect({
+function FilterSelect<T extends string>({
   label,
   value,
   onChange,
   options,
+  formatOption,
+  disabled,
+  title,
 }: {
   label: string
-  value: string
-  onChange: (v: string) => void
-  options: string[]
+  value: T
+  onChange: (v: T) => void
+  options: readonly T[]
+  formatOption?: (v: T) => string
+  disabled?: boolean
+  title?: string
 }) {
   return (
-    <label className="flex items-center gap-1.5 text-sm">
+    <label className="flex items-center gap-1.5 text-sm" title={title}>
       <span className="text-muted-foreground">{label}</span>
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25"
+        onChange={(e) => onChange(e.target.value as T)}
+        disabled={disabled}
+        className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm font-medium text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {options.map((opt) => (
           <option key={opt} value={opt}>
-            {opt}
+            {formatOption ? formatOption(opt) : opt}
           </option>
         ))}
       </select>

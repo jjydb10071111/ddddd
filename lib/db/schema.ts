@@ -63,7 +63,7 @@ export const fieldTags = pgTable("field_tags", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// 과목 - 학문분야 태그 조인 (다대다)
+// 과목 - 학문분야 태그 조인 (다대다) — AI 1차 분류 + 담당자 검수 워크플로우 (F2)
 export const courseFieldTags = pgTable(
   "course_field_tags",
   {
@@ -73,6 +73,7 @@ export const courseFieldTags = pgTable(
     fieldTagId: uuid("field_tag_id")
       .notNull()
       .references(() => fieldTags.id, { onDelete: "cascade" }),
+    reviewed: boolean("reviewed").notNull().default(false), // 검수 전 태그는 검색 결과에 노출 안 함 (PRD 8.2 #3)
   },
   (t) => [
     uniqueIndex("course_field_tags_pk").on(t.courseId, t.fieldTagId),

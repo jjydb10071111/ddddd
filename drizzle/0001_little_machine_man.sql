@@ -1,0 +1,1 @@
+ALTER TABLE "course_field_tags" ADD COLUMN "reviewed" boolean DEFAULT false NOT NULL;
