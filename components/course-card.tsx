@@ -6,9 +6,12 @@ import { HashtagBadge, RatingStars, RequirementBadge } from "@/components/course
 export function CourseCard({
   course,
   ownMajorLabel,
+  relevanceScore,
 }: {
   course: Course
   ownMajorLabel?: "내 전공 과목" | "타 전공 과목"
+  /** F3(산업/진로 분야 검색) 연관도 스코어(0~1). 지정된 경우에만 배지로 표시한다. */
+  relevanceScore?: number
 }) {
   return (
     <Link
@@ -42,8 +45,13 @@ export function CourseCard({
         )}
       </div>
 
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <RatingStars rating={course.rating} reviewCount={course.reviewCount} />
+        {relevanceScore !== undefined && (
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+            연관도 {Math.round(relevanceScore * 100)}%
+          </span>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-1.5">

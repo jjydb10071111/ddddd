@@ -1,7 +1,7 @@
 # 수강길잡이 개발 계획 (스프린트 기반)
 
 > 참고 문서: [`docs/PRD.md`](./PRD.md), [`/CLAUDE.md`](../CLAUDE.md)
-> 최종 수정일: 2026-07-29
+> 최종 수정일: 2026-07-29 (Sprint 3 완료 반영)
 
 ## 이 문서 사용법
 
@@ -17,7 +17,7 @@
 | Sprint 0 | 기반 인프라 (DB/ORM/LLM 벤더/실제 인증) | 진행중 | ORM/LLM 벤더 결정, 스키마·커넥션 모듈·인증 교체 코드 완료. Neon/Vercel 실제 provisioning은 대기 중 |
 | Sprint 1 | F1 — 수강평 해시태그 & AI 요약 (P0) | 완료 (라이브 DB 검증 대기) | 코드 구현 완료, DB 미프로비저닝으로 실제 실행 미검증 — 하단 메모 참고 |
 | Sprint 2 | F2 — 분야 통합 검색 (P0) | 완료 | 5과목 stopgap 기준 — 아래 메모 참고 |
-| Sprint 3 | F3 — 산업/진로 분야 키워드 검색 (P1) | 미시작 | |
+| Sprint 3 | F3 — 산업/진로 분야 키워드 검색 (P1) | 완료 | 임베딩 대신 AI 텍스트 생성+휴리스틱 폴백 사용 — 상세 사유는 Sprint 3 메모 참고 |
 | Sprint 4 | F4 마무리 — AI 맞춤 커리큘럼 설계 (P1) | 부분 진행 | 추천 엔진·실과목 데이터는 이미 있음, 아래 참고 |
 | Sprint 5 | 통합/배포/QA | 미시작 | |
 
@@ -164,21 +164,114 @@
 
 **목표**: PRD 8.3 완료 조건 3개를 전부 충족한다. F4의 관심분야 랭킹이 이 결과물을 그대로 소비하므로, F4 완성보다 먼저 끝나야 함.
 
-- [ ] Industry Tag 테이블 + 산업/진로 태그셋 정의 (반도체, AI·데이터사이언스, 바이오·헬스케어, 금융·핀테크, 콘텐츠·미디어 등)
-- [ ] 과목 설명/키워드 임베딩 생성 파이프라인 (pgvector)
-- [ ] 임베딩 유사도 기반 연관도 스코어링 + 담당자 검수 확정 워크플로우
-- [ ] 산업 분야 검색 API — 연관도 순 정렬, 개설학과/학점/이수구분 포함
-- [ ] "내 전공 과목" vs "타 전공 과목" 구분 표시 (+ 타 전공 정원/선수과목/학년 제한 안내)
-- [ ] 신조어·신산업 태그 확장 운영 프로세스 정리 (문서화만이라도)
-- [ ] `lib/curriculum-data.ts`/`lib/curriculum-engine.ts`의 `academicField`/`industry`가 항상 비어 있던 부분을 이 스프린트 산출물로 채우기 (F4와의 연결고리)
+- [x] Industry Tag 테이블 + 산업/진로 태그셋 정의 (반도체, AI·데이터사이언스, 바이오·헬스케어, 금융·핀테크, 콘텐츠·미디어 등)
+- [ ] 과목 설명/키워드 임베딩 생성 파이프라인 (pgvector) — **실제 임베딩은 아님, 아래 메모 참고**
+- [x] 연관도 스코어링 + 담당자 검수 확정 워크플로우 (임베딩 유사도 대신 AI 텍스트 생성 + 휴리스틱 폴백 — 아래 메모 참고)
+- [x] 산업 분야 검색 API — 연관도 순 정렬, 개설학과/학점/이수구분 포함
+- [x] "내 전공 과목" vs "타 전공 과목" 구분 표시 (+ 타 전공 정원/선수과목/학년 제한 안내)
+- [x] 신조어·신산업 태그 확장 운영 프로세스 정리 (문서화만이라도)
+- [x] `lib/curriculum-data.ts`/`lib/curriculum-engine.ts`의 `academicField`/`industry`가 항상 비어 있던 부분을 이 스프린트 산출물로 채우기 (F4와의 연결고리)
 
 **완료 조건 체크 (PRD 8.3 그대로)**
 
-- [ ] 산업/진로 분야 키워드 검색 시 여러 학과에 걸친 관련 과목이 연관도 순으로 노출된다
-- [ ] 각 결과에 개설 학과, 학점, 이수구분이 표시된다
-- [ ] 내 전공 과목과 타 전공 과목이 구분 표시된다
+- [x] 산업/진로 분야 키워드 검색 시 여러 학과에 걸친 관련 과목이 연관도 순으로 노출된다
+- [x] 각 결과에 개설 학과, 학점, 이수구분이 표시된다
+- [x] 내 전공 과목과 타 전공 과목이 구분 표시된다
 
 **메모**:
+
+- **스코프**: F1/F2와 동일한 stopgap을 그대로 따랐다 — `courses` 테이블에는 여전히
+  `lib/mock-data.ts`의 데모 5과목만 있고(Sprint 1 `db:seed`), 이번 스프린트의 DB 태깅
+  파이프라인(`industry_tags`/`course_industry_tags`)도 그 5과목만 대상으로 한다. 실제
+  2,695개 강좌 카탈로그는 아래 "curriculum-data.ts 연결고리" 항목에서 별도로 다뤘다.
+- **태그셋(F3 Industry Tag)**: 반도체 / AI·데이터사이언스 / 바이오·헬스케어 / 금융·핀테크 /
+  콘텐츠·미디어 / 에너지·환경 6개 — `lib/mock-data.ts`의 기존 `interestFields`(F4 관심분야
+  선택 UI가 이미 쓰던 상수)와 **의도적으로 이름을 똑같이** 맞췄다. `lib/curriculum-engine.ts`의
+  `interestScore`가 `course.industry === field`로 정확한 문자열 비교를 하기 때문에, 두 목록이
+  갈라지면 F4 랭킹이 아무 에러 없이 조용히 0점만 내는 문제가 생긴다. 새 태그(예: "생성형 AI")를
+  추가할 때는 `lib/mock-data.ts`의 `interestFields`도 함께 갱신해야 한다는 점을 `lib/search/
+  industry-tag-taxonomy.ts` 상단에 명시해뒀다.
+- **임베딩 vs 휴리스틱 — 이번 스프린트에서 내린 판단**: PRD 10.3은 pgvector 코사인 유사도를
+  원안으로 하지만, `lib/ai.ts`가 이미 문서화하듯 Vercel AI Gateway는 임베딩 호출을 라우팅하지
+  않는다("For embeddings, use a direct provider SDK"). 별도 프로바이더 SDK를 추가하려면 그
+  프로바이더 전용 API 키가 필요한데 이 세션에는 그런 키가 없어 추가해도 검증이 불가능했다.
+  그래서 검증 불가능한 프로바이더 연동 코드를 새로 추가하는 대신, 다음 2단계 폴백으로
+  구현했다(`lib/search/industry-relevance.ts`, `lib/db/classify-industry-tags.ts` 상단 주석에
+  동일한 설명이 있다):
+  1. AI Gateway `generateText`(F1/F2와 동일 경로, 새 프로바이더 불필요)로 과목당 6개 태그
+     전체에 대해 0~1 점수를 한 번에 요청.
+  2. 이 호출이 실패하면(실제로 `npm run db:classify-industry-tags` 실행 시 "AI Gateway
+     requires a valid credit card on file" 403 — F2 때와 동일한 결제수단 미등록 사유로
+     매번 실패했다) 키워드 중첩 휴리스틱(`scoreIndustryRelevanceHeuristic`)으로 폴백.
+     실제 실행 로그: 반도체공정개론→반도체 0.67, 반도체소자→반도체 0.67, 데이터구조→
+     AI·데이터사이언스 0.33 (모두 휴리스틱 폴백, AI 성공 0/5).
+  `courses.embedding`/`industry_tags.embedding` vector(1536) 컬럼과 pgvector 확장은 그대로
+  스키마에 남겨뒀다 — 나중에 임베딩 프로바이더 키가 생기면 (1) 두 텍스트를 임베딩해 컬럼을
+  채우고 (2) 이 파일의 휴리스틱 호출부를 pgvector `<=>` 코사인 거리 쿼리로 바꾸기만 하면 된다.
+  `course_industry_tags`(relevanceScore, reviewed) 테이블 구조는 바꿀 필요 없다.
+- **검수 워크플로우**: `app/api/industry-tags/review`가 F2의 `app/api/field-tags/review`와
+  동일한 패턴(GET=대기목록, POST `{courseId, industryTagId, action}`)으로 동작한다. `MIN_
+  RELEVANCE_SCORE`(0.2) 미만인 태그는 애초에 행을 만들지 않아 검수 대기열이 0점 태그로
+  오염되지 않는다. 실제로 `npm run db:seed-industry-tags` → `npm run db:classify-industry-
+  tags` → `/api/industry-tags/review` POST(approve) 3건 → `/api/industry-search` 순으로
+  로컬에서 end-to-end 실행해 확인했다(검수 전엔 검색 결과 0건, 검수 후엔 노출되는 것까지 확인).
+- **검색 API/UI**: `app/api/industry-search`가 연관도 내림차순으로 정렬하고, 사용자 학과
+  (`?department=`)를 기준으로 `myMajorCourses`/`otherMajorCourses`로 나눈다. 학과 인자가
+  없으면(비로그인 등) 전부 `otherMajorCourses`로 보수적으로 분류한다. `components/fields-
+  explorer.tsx`는 기존 시각 디자인(카드 그리드, 펼침/접힘)을 유지한 채 `lib/mock-data.ts`
+  정적 데이터 대신 `lib/api/industry-search.ts` 파사드를 호출하도록 다시 연결했다.
+  `components/course-card.tsx`에는 `relevanceScore?: number` optional prop을 추가해 값이
+  있을 때만 "연관도 NN%" 배지를 그린다 — prop을 안 넘기는 기존 호출부(`components/search-
+  results.tsx` 등 F2 소비처)는 렌더링이 완전히 그대로다.
+- **내 전공/타 전공 정원·선수과목·학년 제한 안내**: PRD 8.3 #5가 요구하는 안내 문구
+  (`otherMajorCaveat`)는 항상 표시하되, 실제 정원/선수과목/수강가능학년 데이터는 이 저장소
+  어디에도 없다(F2가 "학년" 필터에서 겪은 것과 동일한 gap, F4의 선수과목 데이터 부재와도
+  동일한 근본 원인). 없는 데이터를 지어내는 대신 "제한이 있을 수 있으니 학과 사무실/
+  수강신청 시스템에서 재확인하라"는 정직한 안내만 노출한다.
+- **신조어·신산업 태그 확장 프로세스(PRD 8.3 #6, 문서화만)**: 태그는 `industry_tags` 테이블의
+  일반 row일 뿐 코드에 박힌 enum이 아니다. 새 산업 분야(예: "생성형 AI")를 추가하려면 —
+  (1) `lib/search/industry-tag-taxonomy.ts` 배열에 `{name, description, keywords,
+  departmentKeywords, icon}` 항목 추가 → (2) `lib/mock-data.ts`의 `interestFields`에도 같은
+  이름 추가(F4 연동 유지) → (3) `npm run db:seed-industry-tags` 재실행(기존 태그는
+  `onConflictDoNothing`으로 건너뜀, 새 태그만 삽입) → (4) `npm run db:classify-industry-tags`
+  재실행해 기존 과목들에 새 태그 연관도를 다시 스코어링 → (5) `/api/industry-tags/review`로
+  검수. 스키마 마이그레이션이 전혀 필요 없다.
+- **`lib/curriculum-data.ts`의 `academicField`/`industry` 채우기 — 접근 방식과 근거**: F2/F3의
+  "AI 1차 분류 + 담당자 검수" 파이프라인은 `courses` 테이블의 5개 데모 과목에만 적용되고,
+  `curriculum-data.ts`의 2,695개(학수번호 기준 중복 제거 후 2,293개) 실제 강좌는 애초에 그
+  테이블에 없어 검수 워크플로우를 거칠 방법이 없다. 이 세션에서 2,293개를 전부 LLM으로
+  분류하고 그 결과를 "검수 없이" 그대로 F4 엔진 입력으로 흘려보내는 것은 F2/F3가 지켜온
+  "AI 태그는 검수 전엔 노출 안 함" 원칙과 정면으로 어긋난다고 판단해 채택하지 않았다. 대신
+  `lib/curriculum-classify.ts`에 **학과명(+과목명) 키워드 매칭 규칙**을 결정론적으로 작성해
+  `lib/curriculum-data.ts`의 `dedupeByCode()`가 과목 단위 레코드를 만들 때 한 번만(모듈 로드
+  시점) 적용했다 — `curriculum-engine.ts`가 호출될 때마다 재계산되지 않는다. industry 판정은
+  F3와 동일한 `lib/search/industry-tag-taxonomy.ts`를 재사용해 태그 이름 축을 통일했고,
+  academicField 판정은 F2의 소분류 18개(`lib/search/field-tag-taxonomy.ts`의 leaf) 중 학과명
+  패턴에 매칭되는 것을 고른다. 규칙에 없는 학과명은 값을 억지로 채우지 않고 `undefined`로
+  남긴다(허위 태깅 방지). **커버리지 실측치**(2,293개 과목 기준): industry 매칭 1,059개
+  (46%), academicField 매칭 968개(42%), 둘 다 매칭 533개. academicField 기준으로는 146개
+  학과 중 93개가 현재 규칙 어디에도 안 걸린다(간호학과·행정학과·신문방송학과류처럼 이번
+  규칙 세트에 없는 학과명). industry별 매칭 수: 바이오·헬스케어 436, 에너지·환경 182,
+  AI·데이터사이언스 119, 금융·핀테크 115, 반도체 113, 콘텐츠·미디어 94. **알아야 할 한계**:
+  이건 "학과명이 그 산업/분야 키워드를 포함하는가"만 보는 규칙이라 재현율이 낮고(맞춤법이
+  다른 학과명, 융합학과, 규칙에 없는 신생 학과는 전부 미분류), 정밀도도 완벽하지 않다(예:
+  "전자공학"이 반도체·AI 두 태그 키워드에 동시에 걸릴 수 있어 점수가 높은 쪽 하나만
+  선택됨). 향후 실제 검수 인력이 생기면 F2/F3와 동일한 AI 1차 분류+검수 워크플로우로
+  교체하는 것이 정답이지만, 이번 스프린트 범위에서는 "없는 데이터를 그럴듯하게 지어내지
+  않는" 쪽을 택했다.
+- **`npx tsc --noEmit`**: 통과(에러 0건).
+- **실서버로 검증한 것**: `next dev`(이미 떠 있던 로컬 서버, 포트 3001)에 Node `fetch`로
+  `/api/industry-tags`(태그 목록+과목수), `/api/industry-tags/review`(GET 대기목록/POST
+  승인), `/api/industry-search`(검수 전 0건 → 승인 후 연관도 내림차순 노출, 학과별
+  내 전공/타 전공 분리)까지 end-to-end 확인. `/fields` 페이지가 200으로 렌더링되는 것도
+  확인했다(클라이언트 컴포넌트라 초기 HTML에는 카드 목록이 없고 마운트 후 fetch로 채워짐).
+- **의도적으로 미룬 것**: (1) 실제 임베딩 프로바이더 연동(위 메모 참고, 스키마는 준비돼
+  있음), (2) 검수 워크플로우 전용 관리자 화면(F2와 동일하게 최소 Route Handler만 구현 —
+  전체 어드민 UI는 범위 밖), (3) `curriculum-data.ts` 분류 규칙의 커버리지 확대(93개
+  미분류 학과에 규칙 추가) — 새 규칙을 원 없이 추가할 수는 있지만 "학과명이 있는데 임의로
+  분야를 못 정하는" 경우(예: 순수 인문/사회 계열 중 태그 6개 어디에도 안 걸리는 학과)는
+  구조적으로 항상 남는다, (4) 정원/선수과목/수강가능학년 실데이터 확보(F2/F4와 공유하는
+  근본적인 데이터 gap).
 
 ---
 

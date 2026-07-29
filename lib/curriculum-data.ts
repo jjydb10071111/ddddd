@@ -15,6 +15,7 @@
 // 여기서 학수번호 기준으로 분반을 합쳐 과목 단위 목록(curriculumCourses)을 만듭니다.
 
 import rawSections from "./data/courses.json"
+import { classifyCurriculumCourse } from "./curriculum-classify"
 
 export type CurriculumRequirement = "전공필수" | "전공선택" | "계열공통" | "기초필수"
 
@@ -46,9 +47,13 @@ export type CurriculumCourse = {
   requirement: CurriculumRequirement
   /** 선수과목 course id 목록 — 원본 데이터에 없어 현재는 항상 비어 있음 */
   prerequisites?: string[]
-  /** F2 학문분야 태그 — 아직 미태깅 */
+  /**
+   * F2 학문분야 태그 — Sprint 3부터 lib/curriculum-classify.ts의 학과명 키워드 휴리스틱으로
+   * 채워진다(담당자 검수를 거치는 courses 테이블의 F2 파이프라인과는 별개 — 왜 그런지는
+   * curriculum-classify.ts 상단 주석 참고). 규칙에 매칭되는 학과명이 없으면 undefined.
+   */
   academicField?: string
-  /** F3 산업/진로 태그 — 아직 미태깅 */
+  /** F3 산업/진로 태그 — 위와 동일한 방식(학과명+과목명 키워드 휴리스틱)으로 채워진다. */
   industry?: string
   rating?: number
   reviewCount?: number
@@ -67,6 +72,7 @@ function dedupeByCode(sections: RawSection[]): CurriculumCourse[] {
   const courses: CurriculumCourse[] = []
   for (const [id, group] of byCode) {
     const first = group[0]
+    const { industry, academicField } = classifyCurriculumCourse(first.department, first.name)
     courses.push({
       id,
       code: first.code,
@@ -76,6 +82,8 @@ function dedupeByCode(sections: RawSection[]): CurriculumCourse[] {
       sectionCount: group.length,
       credits: first.credits,
       requirement: first.requirement as CurriculumRequirement,
+      industry,
+      academicField,
     })
   }
   return courses

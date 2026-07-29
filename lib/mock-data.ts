@@ -136,7 +136,12 @@ export const popularTags: string[] = [
   "에너지",
 ]
 
-// 분야로 찾기 화면
+// 분야로 찾기 화면 (레거시)
+// Sprint 3(F3)부터 components/fields-explorer.tsx는 실제 산업/진로 태그를 Neon
+// (industry_tags/course_industry_tags 테이블, app/api/industry-tags·app/api/industry-search
+// → lib/api/industry-search.ts)에서 읽는다 — 태그 목록/설명/아이콘은
+// lib/search/industry-tag-taxonomy.ts가 진짜 출처다. 이 타입/데이터는 더 이상 UI에서
+// 쓰이지 않지만, 시드 이전 로컬 개발/참고용으로 남겨둔다.
 export type FieldCategory = {
   id: string
   name: string
