@@ -6,6 +6,7 @@ import {
   curriculumCourses,
   getDepartmentCurriculum,
   type CurriculumCourse,
+  type DepartmentCurriculum,
 } from "./curriculum-data"
 
 const CREDITS_PER_SEMESTER_MAX = 18
@@ -20,6 +21,39 @@ export type CurriculumInput = {
   remainingSemesters: number
   /** 사용자가 추천에서 제외한 과목 (인터랙티브 재계산용) */
   excludedCourseIds?: string[]
+  /**
+   * 사용자가 검색해서 직접 추가한 과목(과목 검색-추가 UI, Sprint 4). 관심분야 점수와
+   * 무관하게 항상 포함되며, 전공선택 잔여 학점 계산(2단계)에 반영된 뒤 자동 채우기(3단계)가
+   * 이어진다 — PRD 8.4 플로우차트의 "추가 시 전공선택 잔여 학점 계산으로 되돌아가는" 루프를
+   * 그대로 구현한 것이다.
+   */
+  manualCourseIds?: string[]
+}
+
+/** 과목 카탈로그에서 id로 과목을 찾는 함수 시그니처 — 정적 데이터/DB 조회 어느 쪽이든
+ * 동일한 형태로 엔진에 주입할 수 있게 한다. */
+export type CourseLookup = (id: string) => CurriculumCourse | undefined
+
+export type RecommendCurriculumDeps = {
+  /**
+   * 과목 카탈로그. 기본값은 정적 curriculum-data.ts(curriculumCourses) — 로컬 개발/DB
+   * 미연결 환경의 폴백이다. Route Handler(app/api/curriculum/recommend)는 Neon에서 조회한
+   * 배열을 여기 주입해 실제 요청 경로에서는 정적 파일을 전혀 읽지 않는다.
+   */
+  courses?: CurriculumCourse[]
+  /**
+   * 학과 커리큘럼(전공필수 목록/졸업요건). 기본값은 정적 curriculum-data.ts에서 조회.
+   * 명시적으로 undefined가 아닌 null을 주입하면 "해당 학과 커리큘럼 없음" 경로로 이어진다
+   * (DB에 그 학과의 curricula 행이 없는 경우).
+   */
+  curriculum?: DepartmentCurriculum | null
+  /**
+   * 관심분야 연관도 스코어링 함수. 기본값은 문자열 일치 기반 interestScore. LLM 기반
+   * 랭킹(lib/curriculum/interest-ranking.ts)으로 교체하려면 이 함수만 주입하면 되고,
+   * 엔진의 5단계 순서/로직 자체는 전혀 바뀌지 않는다 — PRD 10.3 "관심분야 매칭만 LLM으로
+   * 고도화" 원칙을 이 주입 지점 하나로 만족시킨다.
+   */
+  scoreInterest?: (course: CurriculumCourse, interestFields: string[]) => number
 }
 
 export type CurriculumRecommendedItem = {
@@ -47,12 +81,17 @@ export type CurriculumRecommendation = {
 
 const DISCLAIMER = "본 추천은 참고용이며, 최종 확인은 학과 사무실을 통해주세요."
 
-function courseById(id: string): CurriculumCourse | undefined {
-  return curriculumCourses.find((c) => c.id === id)
+function makeCourseById(courses: CurriculumCourse[]): CourseLookup {
+  const byId = new Map(courses.map((c) => [c.id, c]))
+  return (id: string) => byId.get(id)
 }
 
 /** 필수과목 집합 내에서 선수과목을 고려한 위상 정렬. 순환/외부 의존은 원래 순서를 유지합니다. */
-function topologicalSortRequired(requiredIds: string[], completed: Set<string>): string[] {
+function topologicalSortRequired(
+  requiredIds: string[],
+  completed: Set<string>,
+  courseById: CourseLookup,
+): string[] {
   const remaining = new Set(requiredIds)
   const sorted: string[] = []
   const visited = new Set<string>()
@@ -103,7 +142,7 @@ function isRequiredType(requirement: string): boolean {
   return requirement === "전공필수" || requirement === "기초필수"
 }
 
-function classifyCompletedCredits(completedCourseIds: string[]) {
+function classifyCompletedCredits(completedCourseIds: string[], courseById: CourseLookup) {
   let requiredCredits = 0
   let electiveCredits = 0
   for (const id of completedCourseIds) {
@@ -115,8 +154,17 @@ function classifyCompletedCredits(completedCourseIds: string[]) {
   return { requiredCredits, electiveCredits }
 }
 
-export function recommendCurriculum(input: CurriculumInput): CurriculumRecommendation {
-  const curriculum = getDepartmentCurriculum(input.department)
+export function recommendCurriculum(
+  input: CurriculumInput,
+  deps: RecommendCurriculumDeps = {},
+): CurriculumRecommendation {
+  // 데이터 소스 주입 지점 — 기본값은 정적 curriculum-data.ts(로컬 개발/폴백용). Route
+  // Handler는 Neon에서 조회한 courses/curriculum을 여기에 넘긴다. 엔진의 5단계 순서·로직은
+  // 아래에서 전혀 바뀌지 않는다 — 어떤 배열/함수를 읽어오는지만 바뀐다.
+  const courses = deps.courses ?? curriculumCourses
+  const courseById = makeCourseById(courses)
+  const curriculum = deps.curriculum !== undefined ? deps.curriculum : getDepartmentCurriculum(input.department)
+  const scoreInterest = deps.scoreInterest ?? interestScore
 
   if (!curriculum) {
     return {
@@ -146,25 +194,49 @@ export function recommendCurriculum(input: CurriculumInput): CurriculumRecommend
         .join(", ")}). 졸업 요건 충족 여부를 반드시 학과 사무실에서 확인하세요.`,
     )
   }
-  const requiredOrdered = topologicalSortRequired(requiredUnfinished, completed)
+  const requiredOrdered = topologicalSortRequired(requiredUnfinished, completed, courseById)
 
   // 2단계: 전공선택 잔여 학점 계산
   const { electiveCredits: completedElectiveCredits } = classifyCompletedCredits(
     input.completedCourseIds,
+    courseById,
   )
   let electiveCreditsRemaining = Math.max(
     0,
     curriculum.electiveMinCredits - completedElectiveCredits,
   )
 
+  // 2.5단계(인터랙티브 추가): 사용자가 검색해서 직접 추가한 과목은 관심분야 점수와 무관하게
+  // 항상 포함하고, 전공선택 잔여 학점에서 먼저 차감한다 — "추가 시 전공선택 잔여 학점
+  // 계산으로 되돌아가는" 재계산 루프를 여기서 구현한다. 이미 전공필수로 배치됐거나
+  // 기이수/제외 처리된 과목은 중복 추가하지 않는다.
+  const requiredOrderedSet = new Set(requiredOrdered)
+  const manualIds = [...new Set(input.manualCourseIds ?? [])].filter(
+    (id) => !completed.has(id) && !excluded.has(id) && !requiredOrderedSet.has(id) && courseById(id),
+  )
+  const manualItems: CurriculumRecommendedItem[] = manualIds.map((id) => {
+    const course = courseById(id)!
+    const ownDepartment = course.department === input.department
+    electiveCreditsRemaining = Math.max(0, electiveCreditsRemaining - course.credits)
+    return {
+      courseId: id,
+      name: course.name,
+      credits: course.credits,
+      bucket: "전공선택",
+      reason: `직접 추가한 과목입니다. 전공선택 학점으로 반영됩니다.${
+        ownDepartment ? "" : " (타 전공 과목 — 수강 가능 여부·정원을 확인하세요)"
+      }`,
+    }
+  })
+
   // 3단계: 관심분야 연관도 높은 과목으로 잔여 슬롯 채우기 (본인 전공 우선)
-  const usedIds = new Set([...completed, ...excluded, ...requiredOrdered])
-  const candidatePool = curriculumCourses
+  const usedIds = new Set([...completed, ...excluded, ...requiredOrdered, ...manualIds])
+  const candidatePool = courses
     .filter((c) => !usedIds.has(c.id))
     .filter((c) => !isRequiredType(c.requirement) || c.department !== input.department)
     .map((c) => ({
       course: c,
-      score: interestScore(c, input.interestFields),
+      score: scoreInterest(c, input.interestFields),
       ownDepartment: c.department === input.department,
     }))
     .sort((a, b) => {
@@ -261,7 +333,7 @@ export function recommendCurriculum(input: CurriculumInput): CurriculumRecommend
   // electiveItems/interestItems는 관심분야 점수순이라 자기 선수과목보다 먼저 나올 수 있습니다.
   // earliestAllowedSemester는 "아직 배치 안 된 선수과목"을 만족된 것으로 착각하지 않도록,
   // 패킹 전에 전체 후보를 선수과목 기준으로 한 번 더 정렬합니다 (원래 우선순위는 최대한 보존).
-  const combined = [...requiredItems, ...electiveItems, ...interestItems]
+  const combined = [...requiredItems, ...manualItems, ...electiveItems, ...interestItems]
   const combinedIds = new Set(combined.map((i) => i.courseId))
   const placedForSort = new Set<string>()
   const orderedForPacking: CurriculumRecommendedItem[] = []

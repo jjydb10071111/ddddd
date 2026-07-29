@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useMemo, useState } from "react"
-import { ChevronDown, Info, Loader2, RotateCcw, Sparkles, X } from "lucide-react"
+import { ChevronDown, Info, Loader2, Plus, RotateCcw, Search, Sparkles, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { interestFields } from "@/lib/mock-data"
 import {
@@ -11,6 +11,8 @@ import {
   getCurriculumCourseById,
 } from "@/lib/curriculum-data"
 import { getCurriculumRecommendation } from "@/lib/api/curriculum"
+import { searchCourses } from "@/lib/api/search"
+import type { Course } from "@/lib/mock-data"
 import type {
   CurriculumBucket,
   CurriculumRecommendation,
@@ -37,12 +39,20 @@ export function CurriculumPlanner() {
   const [fields, setFields] = useState<string[]>(["반도체"])
   const [remainingSemesters, setRemainingSemesters] = useState(5)
   const [excluded, setExcluded] = useState<string[]>([])
+  const [manual, setManual] = useState<string[]>([])
 
   const [status, setStatus] = useState<Status>("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [recommendation, setRecommendation] = useState<CurriculumRecommendation | null>(null)
   const [activeTab, setActiveTab] = useState(0)
   const [openItem, setOpenItem] = useState<string | null>(null)
+
+  // 과목 검색-추가 (Sprint 4) — F2 검색 파사드(lib/api/search.ts)를 그대로 재사용한다.
+  // 이제 courses 테이블에 실제 2,293개 강좌 카탈로그가 전부 들어있어 nameMatches가 곧
+  // 커리큘럼 엔진이 다루는 것과 동일한 과목 풀이다.
+  const [searchQuery, setSearchQuery] = useState("")
+  const [searchResults, setSearchResults] = useState<Course[]>([])
+  const [searchStatus, setSearchStatus] = useState<"idle" | "loading" | "done">("idle")
 
   const departmentCurriculum = useMemo(() => getDepartmentCurriculum(department), [department])
 
@@ -61,7 +71,7 @@ export function CurriculumPlanner() {
     )
   }
 
-  async function runRecommendation(nextExcluded: string[]) {
+  async function runRecommendation(nextExcluded: string[], nextManual: string[]) {
     setStatus("loading")
     setErrorMessage(null)
     const result = await getCurriculumRecommendation({
@@ -70,6 +80,7 @@ export function CurriculumPlanner() {
       interestFields: fields,
       remainingSemesters,
       excludedCourseIds: nextExcluded,
+      manualCourseIds: nextManual,
     })
 
     if (!result.success) {
@@ -80,25 +91,60 @@ export function CurriculumPlanner() {
 
     setRecommendation(result.recommendation)
     setExcluded(nextExcluded)
+    setManual(nextManual)
     setActiveTab(0)
     setStatus("done")
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    void runRecommendation([])
+    void runRecommendation([], [])
   }
 
   function handleExclude(courseId: string) {
-    void runRecommendation([...excluded, courseId])
+    // 직접 추가한 과목을 제외하면 "추가 목록"에서도 함께 빼서 같은 과목이 "제외한 과목"과
+    // "직접 추가한 과목" 두 칩에 동시에 남아 있는 혼란을 막는다.
+    void runRecommendation(
+      [...excluded, courseId],
+      manual.filter((id) => id !== courseId),
+    )
   }
 
   function handleReinclude(courseId: string) {
-    void runRecommendation(excluded.filter((id) => id !== courseId))
+    void runRecommendation(
+      excluded.filter((id) => id !== courseId),
+      manual,
+    )
+  }
+
+  async function handleSearch(e: React.FormEvent) {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    setSearchStatus("loading")
+    const result = await searchCourses(searchQuery.trim())
+    setSearchResults(result.success ? result.nameMatches : [])
+    setSearchStatus("done")
+  }
+
+  function handleAddCourse(courseId: string) {
+    if (manual.includes(courseId) || completedCourseIds.includes(courseId)) return
+    const nextExcluded = excluded.filter((id) => id !== courseId)
+    void runRecommendation(nextExcluded, [...manual, courseId])
+  }
+
+  function handleRemoveManual(courseId: string) {
+    void runRecommendation(
+      excluded,
+      manual.filter((id) => id !== courseId),
+    )
   }
 
   const semesters = recommendation?.semesters ?? []
   const activeSemester = semesters[activeTab]
+  const placedCourseIds = useMemo(
+    () => new Set(semesters.flatMap((s) => s.items.map((i) => i.courseId))),
+    [semesters],
+  )
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,340px)_1fr]">
@@ -283,6 +329,98 @@ export function CurriculumPlanner() {
                 })}
               </div>
             )}
+
+            {manual.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">직접 추가한 과목:</span>
+                {manual.map((id) => {
+                  const course = getCurriculumCourseById(id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => handleRemoveManual(id)}
+                      className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs text-primary transition hover:bg-primary/20"
+                    >
+                      <X className="size-3" aria-hidden="true" />
+                      {course?.name ?? id}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* 과목 검색-추가 */}
+            <div className="mt-4 rounded-xl border border-border bg-card p-4">
+              <p className="text-sm font-medium text-foreground">과목 검색해서 추가</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                추천에 없던 과목도 검색해서 로드맵에 직접 넣을 수 있어요. 전공선택 학점으로
+                반영되고, 나머지 추천은 자동으로 다시 계산돼요.
+              </p>
+              <form onSubmit={handleSearch} className="mt-3 flex gap-2">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="과목명으로 검색 (예: 데이터베이스)"
+                  className="input flex-1"
+                />
+                <button
+                  type="submit"
+                  disabled={searchStatus === "loading" || !searchQuery.trim()}
+                  className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-secondary px-4 py-2 text-sm font-medium text-foreground transition hover:bg-secondary/80 disabled:opacity-60"
+                >
+                  {searchStatus === "loading" ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Search className="size-4" aria-hidden="true" />
+                  )}
+                  검색
+                </button>
+              </form>
+
+              {searchStatus === "done" && (
+                <div className="mt-3 max-h-64 space-y-1.5 overflow-y-auto">
+                  {searchResults.length === 0 && (
+                    <p className="py-2 text-center text-xs text-muted-foreground">
+                      검색 결과가 없습니다.
+                    </p>
+                  )}
+                  {searchResults.map((course) => {
+                    const alreadyAdded = manual.includes(course.id)
+                    const alreadyPlaced = placedCourseIds.has(course.id)
+                    const alreadyCompleted = completedCourseIds.includes(course.id)
+                    const disabled = alreadyAdded || alreadyPlaced || alreadyCompleted
+                    return (
+                      <div
+                        key={course.id}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">{course.name}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {course.department} · {course.requirement} · {course.credits}학점
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAddCourse(course.id)}
+                          disabled={disabled}
+                          className="flex shrink-0 items-center gap-1 rounded-full border border-primary/40 px-2.5 py-1 text-xs font-medium text-primary transition hover:bg-primary/10 disabled:cursor-not-allowed disabled:border-border disabled:text-muted-foreground"
+                        >
+                          <Plus className="size-3" aria-hidden="true" />
+                          {alreadyAdded || alreadyPlaced
+                            ? "추가됨"
+                            : alreadyCompleted
+                              ? "기이수"
+                              : "추가"}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* 학기 탭 */}
             <div className="mt-5 flex flex-wrap gap-2">

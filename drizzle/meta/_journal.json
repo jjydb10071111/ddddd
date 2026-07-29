@@ -15,6 +15,20 @@
       "when": 1785307216033,
       "tag": "0001_little_machine_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785309187244,
+      "tag": "0002_brief_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785309285000,
+      "tag": "0003_chubby_arachne",
+      "breakpoints": true
     }
   ]
 }

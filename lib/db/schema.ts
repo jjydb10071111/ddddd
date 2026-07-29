@@ -45,13 +45,23 @@ export const courses = pgTable("courses", {
   code: text("code").notNull(),
   name: text("name").notNull(),
   department: text("department").notNull(),
-  credits: integer("credits").notNull(),
+  // real(부동소수점) — 실제 카탈로그(lib/data/courses.json)에 0.5학점 단위 과목이 존재해
+  // (예: 세미나·실습 과목) integer로는 표현이 안 된다. mock-data.ts의 정수 학점도 문제없이 담긴다.
+  credits: real("credits").notNull(),
   requirement: text("requirement").notNull(), // 전공필수/전공선택/계열공통/기초필수/교양
   syllabus: text("syllabus"),
   semester: text("semester"), // 개설학기, 예: "2026-2"
   prerequisites: jsonb("prerequisites").$type<string[]>().notNull().default([]),
   // F3 임베딩 유사도 검색용 — 과목 설명/키워드를 벡터화. 값이 쌓이기 전까지는 null.
   embedding: vector("embedding", { dimensions: 1536 }),
+  // Sprint 4(F4) 전용 — lib/curriculum-classify.ts의 학과명 키워드 휴리스틱 결과를 그대로
+  // 옮겨온 값이다. 의도적으로 courseIndustryTags/courseFieldTags(F2/F3의 "AI 1차 분류 +
+  // 담당자 검수" 조인 테이블)와는 분리했다 — 2,293개 실제 강좌를 검수 없이 그 테이블에
+  // 넣으면 F2/F3 검수 대기열이 오염되고, reviewed=true 게이트 때문에 F4가 영영 이 값을
+  // 못 쓰게 된다. 커리큘럼 엔진(app/api/curriculum/recommend)만 이 컬럼을 읽는다 — F2/F3
+  // 검색 API는 여전히 courseIndustryTags/courseFieldTags(reviewed=true)만 본다.
+  curriculumIndustry: text("curriculum_industry"),
+  curriculumAcademicField: text("curriculum_academic_field"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,7 +1,7 @@
 // lib/api/curriculum.ts
-// F4(AI 맞춤 커리큘럼 설계) 파사드. 지금은 app/api/curriculum/recommend가 더미 데이터
-// 기반 결정론적 엔진(lib/curriculum-engine.ts)을 호출합니다.
-// TODO(IDE 단계): 학과 졸업요건/과목 데이터를 Neon으로, 관심분야 매칭을 LLM/임베딩으로 교체.
+// F4(AI 맞춤 커리큘럼 설계) 파사드. app/api/curriculum/recommend가 Neon(courses/curricula)
+// 조회 결과를 lib/curriculum-engine.ts에 주입해 계산하고, 관심분야 랭킹은 AI Gateway 시도 후
+// 실패 시 문자열 일치 휴리스틱으로 폴백합니다(Sprint 4, lib/curriculum/ 참고).
 
 import type { CurriculumInput, CurriculumRecommendation } from "@/lib/curriculum-engine"
 
