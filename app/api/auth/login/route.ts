@@ -4,11 +4,11 @@ import { cookies } from "next/headers";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password } = body ?? {};
+    const { studentId, password } = body ?? {};
 
-    if (!email || typeof email !== "string" || !email.includes("@")) {
+    if (!studentId || typeof studentId !== "string" || !/^\d{6,10}$/.test(studentId)) {
       return NextResponse.json(
-        { success: false, message: "유효한 학교 이메일을 입력해 주세요." },
+        { success: false, message: "학번 형식을 확인해주세요. (숫자만 입력)" },
         { status: 400 }
       );
     }
@@ -22,19 +22,18 @@ export async function POST(request: Request) {
 
     // 데모 사용자 또는 동적 사용자 정보 생성
     let user;
-    if (email.toLowerCase() === "student@university.ac.kr") {
+    if (studentId === "202012345") {
       user = {
         id: "usr_101",
         name: "김수강",
-        email: "student@university.ac.kr",
+        studentId: "202012345",
         department: "컴퓨터공학과",
       };
     } else {
-      const nameFromEmail = email.split("@")[0];
       user = {
         id: `usr_${Date.now()}`,
-        name: `${nameFromEmail} 학우`,
-        email: email,
+        name: `${studentId} 학우`,
+        studentId,
         department: "인공지능학과",
       };
     }

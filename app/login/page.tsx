@@ -8,11 +8,12 @@ import { useState } from "react"
 import { Compass, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
+import { loginWithProvider } from "@/lib/api/auth"
 
 export default function LoginPage() {
   const router = useRouter()
   const { login: authLogin } = useAuth()
-  const [email, setEmail] = useState("")
+  const [studentId, setStudentId] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -23,7 +24,7 @@ export default function LoginPage() {
     setError(null)
     setIsSubmitting(true)
 
-    const result = await authLogin({ email, password })
+    const result = await authLogin({ studentId, password })
 
     setIsSubmitting(false)
 
@@ -40,7 +41,7 @@ export default function LoginPage() {
     setError(null)
     setIsGoogleSubmitting(true)
 
-    const result = await authLogin({ email: "student@university.ac.kr", password: "password123" })
+    const result = await loginWithProvider("google")
 
     setIsGoogleSubmitting(false)
 
@@ -68,23 +69,24 @@ export default function LoginPage() {
         <div className="text-center">
           <h1 className="font-display text-xl font-bold text-foreground">로그인</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            학교 이메일로 로그인하고 맞춤 추천을 받아보세요
+            학번으로 로그인하고 맞춤 추천을 받아보세요
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium text-foreground">
-              학교 이메일
+            <label htmlFor="studentId" className="text-sm font-medium text-foreground">
+              학번
             </label>
             <input
-              id="email"
-              type="email"
-              autoComplete="email"
+              id="studentId"
+              type="text"
+              inputMode="numeric"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="example@university.ac.kr"
+              value={studentId}
+              onChange={(e) => setStudentId(e.target.value)}
+              placeholder="예: 202012345"
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25"
             />
           </div>

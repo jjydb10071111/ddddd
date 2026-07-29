@@ -3,12 +3,12 @@
 export type User = {
   id: string;
   name: string;
-  email: string;
+  studentId: string;
   department?: string;
 };
 
 export type LoginInput = {
-  email: string;
+  studentId: string;
   password: string;
 };
 
@@ -64,6 +64,8 @@ export async function getCurrentUser(): Promise<{ authenticated: boolean; user: 
 export async function loginWithProvider(
   provider: "google"
 ): Promise<LoginResult> {
-  // OAuth 연동 시 사용 (소셜 로그인 테스트용 Mock)
-  return login({ email: "google.user@university.ac.kr", password: "googlepassword" });
+  // TODO(IDE 단계): OAuth 연동 (NextAuth 등)으로 교체
+  // 학번 기반 계정과 소셜 로그인을 어떻게 연결할지는 별도 확인 필요.
+  console.warn(`[auth.loginWithProvider] ${provider} 로그인 미연결`);
+  return { success: false, message: "준비 중인 기능입니다." };
 }
