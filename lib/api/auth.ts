@@ -1,0 +1,69 @@
+// lib/api/auth.ts
+
+export type User = {
+  id: string;
+  name: string;
+  email: string;
+  department?: string;
+};
+
+export type LoginInput = {
+  email: string;
+  password: string;
+};
+
+export type LoginResult = {
+  success: boolean;
+  message?: string;
+  user?: User;
+};
+
+export async function login(input: LoginInput): Promise<LoginResult> {
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error("Login request failed:", err);
+    return { success: false, message: "서버와의 통신에 실패했습니다." };
+  }
+}
+
+export async function logout(): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch("/api/auth/logout", {
+      method: "POST",
+    });
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error("Logout request failed:", err);
+    return { success: false, message: "로그아웃 실패" };
+  }
+}
+
+export async function getCurrentUser(): Promise<{ authenticated: boolean; user: User | null }> {
+  try {
+    const res = await fetch("/api/auth/me", {
+      method: "GET",
+      cache: "no-store",
+    });
+    if (!res.ok) return { authenticated: false, user: null };
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error("Get current user request failed:", err);
+    return { authenticated: false, user: null };
+  }
+}
+
+export async function loginWithProvider(
+  provider: "google"
+): Promise<LoginResult> {
+  // OAuth 연동 시 사용 (소셜 로그인 테스트용 Mock)
+  return login({ email: "google.user@university.ac.kr", password: "googlepassword" });
+}

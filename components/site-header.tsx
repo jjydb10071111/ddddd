@@ -5,8 +5,9 @@ import type React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Compass, Search, Sparkles } from "lucide-react"
+import { Compass, LogIn, LogOut, Search, Sparkles, User as UserIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/components/auth-provider"
 
 const navLinks = [
   { href: "/fields", label: "분야로 찾기", icon: Compass },
@@ -17,6 +18,7 @@ export function SiteHeader() {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { user, isLoading, logout } = useAuth()
   const [query, setQuery] = useState("")
 
   // 검색 결과 화면에서는 현재 검색어를 검색창에 반영
@@ -31,6 +33,12 @@ export function SiteHeader() {
     const trimmed = query.trim()
     if (!trimmed) return
     router.push(`/search?q=${encodeURIComponent(trimmed)}`)
+  }
+
+  async function handleLogout() {
+    await logout()
+    router.push("/")
+    router.refresh()
   }
 
   return (
@@ -66,7 +74,7 @@ export function SiteHeader() {
           </div>
         </form>
 
-        <nav className="ml-auto flex items-center gap-1 md:ml-0">
+        <nav className="ml-auto flex items-center gap-1.5 md:ml-0">
           {navLinks.map((link) => {
             const active = pathname === link.href
             const Icon = link.icon
@@ -86,6 +94,34 @@ export function SiteHeader() {
               </Link>
             )
           })}
+
+          {!isLoading && (
+            user ? (
+              <div className="flex items-center gap-2 pl-2">
+                <div className="flex items-center gap-1.5 rounded-full bg-secondary/80 px-3 py-1.5 text-xs font-medium text-foreground">
+                  <UserIcon className="size-3.5 text-primary" />
+                  <span>{user.name}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  title="로그아웃"
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <LogOut className="size-3.5" />
+                  <span className="hidden sm:inline">로그아웃</span>
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="ml-1 flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                <LogIn className="size-4" />
+                <span>로그인</span>
+              </Link>
+            )
+          )}
         </nav>
       </div>
     </header>

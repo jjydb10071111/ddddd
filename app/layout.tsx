@@ -47,6 +47,8 @@ export const viewport: Viewport = {
   ],
 }
 
+import { AuthProvider } from '@/components/auth-provider'
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -58,7 +60,9 @@ export default function RootLayout({
       className={`bg-background ${notoSansKr.variable} ${poppins.variable}`}
     >
       <body className="font-sans antialiased">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
