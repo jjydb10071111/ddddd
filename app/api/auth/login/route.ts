@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { users } from "@/lib/db/schema";
+import { hashPassword, verifyPassword } from "@/lib/auth/password";
 
 export async function POST(request: Request) {
   try {
@@ -20,23 +24,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // 데모 사용자 또는 동적 사용자 정보 생성
-    let user;
-    if (studentId === "202012345") {
-      user = {
-        id: "usr_101",
-        name: "김수강",
-        studentId: "202012345",
-        department: "컴퓨터공학과",
-      };
+    const [existing] = await db.select().from(users).where(eq(users.studentId, studentId)).limit(1);
+
+    let record;
+    if (existing) {
+      const passwordOk = await verifyPassword(password, existing.passwordHash);
+      if (!passwordOk) {
+        return NextResponse.json(
+          { success: false, message: "학번 또는 비밀번호가 올바르지 않습니다." },
+          { status: 401 }
+        );
+      }
+      record = existing;
     } else {
-      user = {
-        id: `usr_${Date.now()}`,
-        name: `${studentId} 학우`,
-        studentId,
-        department: "인공지능학과",
-      };
+      // 첫 로그인 시 계정을 자동 생성한다(가입 절차 없음 — 기존 데모 동작과 동일한 UX 유지).
+      const passwordHash = await hashPassword(password);
+      const isSeedDemoUser = studentId === "202012345";
+      const [created] = await db
+        .insert(users)
+        .values({
+          studentId,
+          passwordHash,
+          name: isSeedDemoUser ? "김수강" : `${studentId} 학우`,
+          department: isSeedDemoUser ? "컴퓨터공학과" : "인공지능학과",
+        })
+        .returning();
+      record = created;
     }
+
+    const user = {
+      id: record.id,
+      name: record.name,
+      studentId: record.studentId,
+      department: record.department,
+    };
 
     const sessionPayload = JSON.stringify(user);
     const encodedToken = Buffer.from(sessionPayload).toString("base64");

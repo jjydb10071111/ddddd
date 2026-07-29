@@ -14,7 +14,7 @@
 
 | Sprint | 목표 | 상태 | 비고 |
 | --- | --- | --- | --- |
-| Sprint 0 | 기반 인프라 (DB/ORM/LLM 벤더/실제 인증) | 미시작 | 지금은 전부 mock — 아래 "지금까지 된 것" 참고 |
+| Sprint 0 | 기반 인프라 (DB/ORM/LLM 벤더/실제 인증) | 진행중 | ORM/LLM 벤더 결정, 스키마·커넥션 모듈·인증 교체 코드 완료. Neon/Vercel 실제 provisioning은 대기 중 |
 | Sprint 1 | F1 — 수강평 해시태그 & AI 요약 (P0) | 미시작 | |
 | Sprint 2 | F2 — 분야 통합 검색 (P0) | 미시작 | |
 | Sprint 3 | F3 — 산업/진로 분야 키워드 검색 (P1) | 미시작 | |
@@ -38,16 +38,21 @@
 
 **목표**: PRD 10장의 목표 아키텍처(Next.js + Neon + Vercel + LLM API)를 실제로 연결한다. 이후 스프린트의 F1~F4 작업이 전부 이 위에서 진행된다.
 
-- [ ] ORM 선정 (Prisma vs Drizzle) — PRD 14장 오픈 이슈. `neon-db-schema` 에이전트와 상의해 결정하고 이 문서에 결정 사유를 기록
-- [ ] Neon 프로젝트 생성, `DATABASE_URL` 등 환경변수 설정 (로컬 `.env.local` + Vercel 프로젝트 환경변수)
-- [ ] Neon 서버리스 드라이버 기반 DB 커넥션 모듈 작성 (`lib/db.ts` 등) — PRD 10.4의 커넥션 오버헤드 주의사항 반영
-- [ ] PRD 9장 7개 핵심 엔티티(Course, Field Tag, Industry Tag, Review, Summary, User, Curriculum) 스키마 마이그레이션 작성
-- [ ] pgvector 확장 활성화 (F3/F4 임베딩 유사도 검색에 필요 — 인덱스는 데이터가 쌓인 뒤에 추가)
-- [ ] LLM API 벤더 선정 — PRD 14장 오픈 이슈. `vercel:ai-sdk`/`vercel:ai-gateway` 스킬 활용해 클라이언트 셋업
-- [ ] 기존 mock 인증을 실제 User 테이블 기반으로 교체 (세션 쿠키 발급 로직은 유지, 사용자 조회/생성만 DB로)
+- [x] ORM 선정 (Prisma vs Drizzle) — PRD 14장 오픈 이슈. `neon-db-schema` 에이전트와 상의해 결정하고 이 문서에 결정 사유를 기록
+- [ ] Neon 프로젝트 생성, `DATABASE_URL` 등 환경변수 설정 (로컬 `.env.local` + Vercel 프로젝트 환경변수) — **Vercel 계정 인증 대기 중** (아래 메모)
+- [x] Neon 서버리스 드라이버 기반 DB 커넥션 모듈 작성 (`lib/db.ts` 등) — PRD 10.4의 커넥션 오버헤드 주의사항 반영
+- [x] PRD 9장 7개 핵심 엔티티(Course, Field Tag, Industry Tag, Review, Summary, User, Curriculum) 스키마 마이그레이션 작성
+- [ ] pgvector 확장 활성화 (F3/F4 임베딩 유사도 검색에 필요 — 인덱스는 데이터가 쌓인 뒤에 추가) — 마이그레이션 SQL에 `CREATE EXTENSION IF NOT EXISTS vector`는 포함, 실제 적용은 DB 연결 후
+- [x] LLM API 벤더 선정 — PRD 14장 오픈 이슈. `vercel:ai-sdk`/`vercel:ai-gateway` 스킬 활용해 클라이언트 셋업
+- [x] 기존 mock 인증을 실제 User 테이블 기반으로 교체 (세션 쿠키 발급 로직은 유지, 사용자 조회/생성만 DB로) — 코드 완료, 실제 DB 연결 후 동작 검증 필요
 - [ ] Vercel 프리뷰 배포 + Neon 브랜칭 연동 확인 (PRD 10.4 — 배포마다 격리된 DB 브랜치)
 
 **메모**:
+
+- **ORM: Drizzle 채택.** Neon 서버리스 드라이버와의 궁합, 가벼운 콜드스타트, SQL에 가까운 타입 추론이 Vercel Functions(서버리스) 환경에 더 적합하다고 판단. 스키마는 `lib/db/schema.ts`, 커넥션은 `lib/db/index.ts`(`drizzle-orm/neon-http` + `@neondatabase/serverless`), 마이그레이션 설정은 `drizzle.config.ts`/`drizzle/`.
+- **LLM 벤더: Vercel AI Gateway 채택.** `ai` 패키지에 `provider/model` 문자열(`lib/ai.ts`의 `AI_MODELS`)을 그대로 넘겨 라우팅 — 프로바이더 SDK를 직접 설치하지 않는다. 인증은 OIDC 기본값(`vercel env pull` → `VERCEL_OIDC_TOKEN`). 단, **임베딩(F3)은 게이트웨이 미지원이라 direct provider SDK가 별도로 필요** — Sprint 3에서 재검토.
+- **Neon 프로젝트 생성 / Vercel 프리뷰-Neon 브랜칭 연동**: 이 저장소가 아직 Vercel 프로젝트에 link되어 있지 않고(`vercel link` 미실행), CLI 인증도 안 되어 있어 브라우저 인증이 필요하다. `vercel integration add neon`으로 마켓플레이스를 통해 provisioning할 예정 — 사용자 인증 완료 후 이어서 진행.
+- PRD 9장 엔티티 스키마의 `requirement`(이수구분) 컬럼은 mock-data(교양)와 curriculum-data(계열공통/기초필수) 값 집합이 달라 DB에서는 `text`로 느슨하게 두고, 정적 데이터를 이 스키마로 옮기는 이관 스크립트는 Sprint 3/4(실제 태그/커리큘럼 데이터 확보 이후)로 미룸.
 
 ---
 
