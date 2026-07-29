@@ -1,16 +1,34 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { PenLine, Star, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { PenLine, Sparkles, Star, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { aiSuggestedTags, predefinedReviewTags } from "@/lib/mock-data"
+import { predefinedReviewTags } from "@/lib/mock-data"
+import { submitReview, suggestHashtags } from "@/lib/api/reviews"
+import { useAuth } from "@/components/auth-provider"
 
-export function ReviewComposer() {
+// 자유 텍스트가 이보다 짧으면 AI 태그 추천을 시도하지 않는다.
+const AI_SUGGEST_MIN_LENGTH = 10
+const AI_SUGGEST_DEBOUNCE_MS = 900
+
+export function ReviewComposer({
+  courseId,
+  onSubmitted,
+}: {
+  courseId: string
+  onSubmitted?: () => void
+}) {
+  const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
   const [body, setBody] = useState("")
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [aiTags, setAiTags] = useState<string[]>([])
+  const [aiLoading, setAiLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // 모달 열림 시 배경 스크롤 방지 + ESC 닫기
   useEffect(() => {
@@ -26,19 +44,78 @@ export function ReviewComposer() {
     }
   }, [open])
 
+  // 자유 텍스트 → AI 해시태그 "후보" 추천 (디바운스). 사용자가 채택/수정하는 후보일 뿐,
+  // 자동으로 선택되지 않는다 — 클릭해야 selectedTags에 반영된다.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    if (body.trim().length < AI_SUGGEST_MIN_LENGTH) {
+      setAiTags([])
+      setAiLoading(false)
+      return
+    }
+
+    debounceRef.current = setTimeout(async () => {
+      setAiLoading(true)
+      const result = await suggestHashtags(body)
+      setAiTags(result.success ? result.tags : [])
+      setAiLoading(false)
+    }, AI_SUGGEST_DEBOUNCE_MS)
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [body])
+
   function toggleTag(tag: string) {
     setSelectedTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     )
   }
 
-  function handleSubmit() {
-    // 실제 저장 로직은 없음 — 디자인 초안이므로 모달만 닫고 상태 초기화
-    setOpen(false)
+  function resetForm() {
     setRating(0)
     setHoverRating(0)
     setBody("")
     setSelectedTags([])
+    setAiTags([])
+    setError(null)
+  }
+
+  async function handleSubmit() {
+    if (!user) {
+      setError("로그인 후 이용할 수 있습니다.")
+      return
+    }
+    if (rating === 0) {
+      setError("별점을 선택해주세요.")
+      return
+    }
+    if (body.trim().length < 5) {
+      setError("수강평을 5자 이상 입력해주세요.")
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+
+    const result = await submitReview({
+      courseId,
+      rating,
+      body: body.trim(),
+      hashtags: selectedTags,
+    })
+
+    setSubmitting(false)
+
+    if (!result.success) {
+      setError(result.message ?? "수강평 등록에 실패했습니다.")
+      return
+    }
+
+    setOpen(false)
+    resetForm()
+    onSubmitted?.()
   }
 
   return (
@@ -159,32 +236,46 @@ export function ReviewComposer() {
               </div>
             </div>
 
-            {/* AI 추천 태그 */}
+            {/* AI 추천 태그 (후보 제안 — 클릭해야 채택됨) */}
             <div className="mt-4">
               <p className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                <Sparkles className="size-3.5" aria-hidden="true" />
                 AI 추천 태그
+                {aiLoading && <span className="text-xs font-normal">분석 중...</span>}
               </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {aiSuggestedTags.map((tag) => {
-                  const selected = selectedTags.includes(tag)
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => toggleTag(tag)}
-                      className={cn(
-                        "rounded-full border border-dashed px-3 py-1.5 text-sm font-medium transition",
-                        selected
-                          ? "border-muted-foreground bg-muted-foreground text-background"
-                          : "border-border bg-muted text-muted-foreground hover:bg-secondary",
-                      )}
-                    >
-                      #{tag}
-                    </button>
-                  )
-                })}
-              </div>
+              {aiTags.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {aiTags.map((tag) => {
+                    const selected = selectedTags.includes(tag)
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => toggleTag(tag)}
+                        className={cn(
+                          "rounded-full border border-dashed px-3 py-1.5 text-sm font-medium transition",
+                          selected
+                            ? "border-muted-foreground bg-muted-foreground text-background"
+                            : "border-border bg-muted text-muted-foreground hover:bg-secondary",
+                        )}
+                      >
+                        #{tag}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                !aiLoading && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    수강평을 {AI_SUGGEST_MIN_LENGTH}자 이상 작성하면 AI가 어울리는 태그를 추천해드려요.
+                  </p>
+                )
+              )}
             </div>
+
+            {error && (
+              <p className="mt-4 text-sm font-medium text-destructive">{error}</p>
+            )}
 
             <div className="mt-6 flex gap-2">
               <button
@@ -197,9 +288,10 @@ export function ReviewComposer() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="flex-1 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
+                disabled={submitting}
+                className="flex-1 rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                등록
+                {submitting ? "등록 중..." : "등록"}
               </button>
             </div>
           </div>

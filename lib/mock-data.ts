@@ -197,7 +197,10 @@ export const fieldCategories: FieldCategory[] = [
   },
 ]
 
-// 과목 상세 - 개별 수강평
+// 과목 상세 - 개별 수강평 (레거시)
+// Sprint 1(F1)부터 app/courses/[id]/page.tsx는 실제 리뷰를 Neon(reviews 테이블,
+// components/course-reviews-section.tsx → lib/api/reviews.ts)에서 읽는다. 이 목업은
+// 더 이상 UI에서 쓰이지 않지만, 시드 이전 로컬 개발/참고용으로 남겨둔다.
 export const mockReviews: Record<string, Review[]> = {
   "calculus-1": [
     {
@@ -305,8 +308,10 @@ export const predefinedReviewTags: string[] = [
   "재수강비추",
 ]
 
-// AI 추천 태그 (회색 톤)
-export const aiSuggestedTags: string[] = ["개념중심", "복습필수", "실습위주"]
+// AI 추천 태그는 더 이상 여기서 정적으로 정의하지 않는다 — Sprint 1(F1)부터
+// app/api/reviews/suggest-tags가 자유 텍스트를 분석해 predefinedReviewTags 안에서만
+// 후보를 골라 반환한다(lib/api/reviews.ts의 suggestHashtags). 새 태그를 임의로 추가하지
+// 말 것 — PRD 8.1에 명시된 9종이 고정 세트다.
 
 // 커리큘럼 설계 - 학과 목록은 lib/curriculum-data.ts의 departmentCurricula(실제 개설강좌 기반)를 사용합니다.
 

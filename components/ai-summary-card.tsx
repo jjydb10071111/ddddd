@@ -1,12 +1,15 @@
 import { Sparkles } from "lucide-react"
 import type { HashtagStat } from "@/lib/mock-data"
+import { HashtagFrequencyList } from "@/components/hashtag-frequency"
 
 export function AiSummaryCard({
   summary,
   hashtags,
+  polarized = false,
 }: {
   summary: string
   hashtags: HashtagStat[]
+  polarized?: boolean
 }) {
   return (
     <section className="rounded-2xl border border-primary/20 bg-primary/[0.06] p-6 md:p-7">
@@ -19,33 +22,18 @@ export function AiSummaryCard({
         </h2>
       </div>
 
+      {polarized && (
+        <p className="mt-3 inline-flex items-center rounded-full bg-chart-5/15 px-3 py-1 text-xs font-semibold text-chart-5">
+          호불호가 갈리는 강의예요 — 개별 수강평도 함께 확인해보세요
+        </p>
+      )}
+
       <p className="mt-4 text-pretty leading-relaxed text-foreground/90">
         {summary}
       </p>
 
       <div className="mt-6">
-        <p className="mb-3 text-sm font-semibold text-foreground">
-          수강생들이 이렇게 언급했어요
-        </p>
-        <div className="space-y-3">
-          {hashtags.map((h) => (
-            <div key={h.tag} className="flex items-center gap-3">
-              <span className="w-28 shrink-0 text-sm font-medium text-foreground">
-                #{h.tag}
-              </span>
-              <div className="relative h-6 flex-1 overflow-hidden rounded-full bg-card">
-                <div
-                  className="flex h-full items-center justify-end rounded-full bg-primary px-2 transition-all"
-                  style={{ width: `${h.percent}%` }}
-                >
-                  <span className="text-xs font-semibold text-primary-foreground">
-                    {h.percent}%
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <HashtagFrequencyList hashtags={hashtags} />
       </div>
     </section>
   )

@@ -15,7 +15,7 @@
 | Sprint | 목표 | 상태 | 비고 |
 | --- | --- | --- | --- |
 | Sprint 0 | 기반 인프라 (DB/ORM/LLM 벤더/실제 인증) | 진행중 | ORM/LLM 벤더 결정, 스키마·커넥션 모듈·인증 교체 코드 완료. Neon/Vercel 실제 provisioning은 대기 중 |
-| Sprint 1 | F1 — 수강평 해시태그 & AI 요약 (P0) | 미시작 | |
+| Sprint 1 | F1 — 수강평 해시태그 & AI 요약 (P0) | 완료 (라이브 DB 검증 대기) | 코드 구현 완료, DB 미프로비저닝으로 실제 실행 미검증 — 하단 메모 참고 |
 | Sprint 2 | F2 — 분야 통합 검색 (P0) | 미시작 | |
 | Sprint 3 | F3 — 산업/진로 분야 키워드 검색 (P1) | 미시작 | |
 | Sprint 4 | F4 마무리 — AI 맞춤 커리큘럼 설계 (P1) | 부분 진행 | 추천 엔진·실과목 데이터는 이미 있음, 아래 참고 |
@@ -60,23 +60,62 @@
 
 **목표**: PRD 8.1 완료 조건 4개를 전부 충족한다. `ai-review-summarizer` 에이전트/`review-ai-summary` 스킬 참고.
 
-- [ ] Review/Summary 테이블 CRUD Route Handler (`app/api/reviews/**`)
-- [ ] 리뷰 작성 UI — 별점(5점) + 자유 텍스트 + 사전 정의 해시태그 9종 다중 선택 (`components/review-composer.tsx` 확장)
-- [ ] AI 해시태그 추천 — 자유 텍스트 → LLM 후보 제안 → 사용자가 채택/수정
-- [ ] AI 요약 생성 파이프라인 — 리뷰 5개 미만이면 생략, 이상이면 3~5문장(전반적 경향/장단점/추천 대상) 생성 후 Summary 테이블에 캐싱
-- [ ] 신규 리뷰 누적 시 요약 재생성 트리거 (매 조회마다 재생성 금지)
-- [ ] 과목 상세 페이지에 해시태그별 언급 빈도(%) 표시
-- [ ] 동일 사용자 반복/도배성 리뷰, 평점 테러 탐지·필터링 로직
-- [ ] Edge case UI: 호불호 갈리는 강의 문구, 리뷰 0개 안내 문구
+- [x] Review/Summary 테이블 CRUD Route Handler (`app/api/reviews/**`)
+- [x] 리뷰 작성 UI — 별점(5점) + 자유 텍스트 + 사전 정의 해시태그 9종 다중 선택 (`components/review-composer.tsx` 확장)
+- [x] AI 해시태그 추천 — 자유 텍스트 → LLM 후보 제안 → 사용자가 채택/수정
+- [x] AI 요약 생성 파이프라인 — 리뷰 5개 미만이면 생략, 이상이면 3~5문장(전반적 경향/장단점/추천 대상) 생성 후 Summary 테이블에 캐싱
+- [x] 신규 리뷰 누적 시 요약 재생성 트리거 (매 조회마다 재생성 금지)
+- [x] 과목 상세 페이지에 해시태그별 언급 빈도(%) 표시
+- [x] 동일 사용자 반복/도배성 리뷰, 평점 테러 탐지·필터링 로직
+- [x] Edge case UI: 호불호 갈리는 강의 문구, 리뷰 0개 안내 문구
 
 **완료 조건 체크 (PRD 8.1 그대로)**
 
-- [ ] 수강평 작성 시 해시태그 다중 선택 및 AI 추천 태그 기능이 동작한다
-- [ ] 리뷰 5개 이상 과목에서 AI 요약이 생성되어 노출된다
-- [ ] 해시태그별 언급 빈도가 과목 상세 페이지에 표시된다
-- [ ] 신규 리뷰 등록 시 요약이 갱신된다
+- [x] 수강평 작성 시 해시태그 다중 선택 및 AI 추천 태그 기능이 동작한다 *(코드 구현 완료 — 아래 메모의 라이브 DB 검증 필요 항목 참고)*
+- [x] 리뷰 5개 이상 과목에서 AI 요약이 생성되어 노출된다 *(동일)*
+- [x] 해시태그별 언급 빈도가 과목 상세 페이지에 표시된다 *(동일 — 리뷰 1개부터도 표시, 5개 기준은 AI 요약에만 적용)*
+- [x] 신규 리뷰 등록 시 요약이 갱신된다 *(동일 — REGENERATION_THRESHOLD=3개 누적마다 재생성, 매 등록마다는 아님)*
 
 **메모**:
+
+- **데이터 소스 결정**: F1은 `courses`/`reviews`/`summaries` 테이블에 실제 FK를 걸어야 하는데,
+  실제 2,695개 강좌 카탈로그(`lib/curriculum-data.ts`)는 F2/F3 검수 전이라 이번 스프린트
+  범위 밖이고, 브라우징 UI(홈/검색/과목상세)가 지금 실제로 도달 가능한 과목은 여전히
+  `lib/mock-data.ts`의 데모 5과목뿐이다. 그래서 `lib/db/seed.ts`(`npm run db:seed`)로 그
+  5과목만 동일한 `id`(예: `"calculus-1"`)로 `courses` 테이블에 시드하고,
+  `app/courses/[id]/page.tsx`는 과목의 정적 메타데이터(이름/학과/교수/학점)는 계속
+  `mock-data.ts`에서 읽되, 평점/리뷰/AI 요약은 전부 Neon에서 읽도록 분리했다. `mock-data.ts`의
+  `Course.rating`/`reviewCount`/`hashtags`/`summary` 필드는 이제 과목 상세 페이지에서 쓰이지
+  않는다(홈/검색/분야 카드에는 아직 쓰임) — Sprint 2에서 과목 카탈로그가 통합되면 이 필드들과
+  `mock-data.ts`의 `mockReviews`는 정리 대상.
+- **아키텍처**: `app/api/reviews/route.ts`(GET 목록+해시태그 빈도, POST 작성),
+  `app/api/reviews/suggest-tags/route.ts`(AI 해시태그 후보, `AI_MODELS.fast`),
+  `app/api/reviews/summary/[courseId]/route.ts`(캐시된 요약 상태 조회 — 여기서는 LLM을
+  호출하지 않음). 요약 생성/재생성 로직은 `lib/reviews/summary.ts`에 모았고, 리뷰 POST
+  응답 이후 Next.js `after()`로 비동기 트리거해 리뷰 작성자가 LLM 응답을 기다리지 않게
+  했다(PRD 10.3). 어뷰징 탐지는 `lib/reviews/abuse.ts`(도배 요청 빈도, 본문 유사도, 평점
+  테러 휴리스틱)에 있고, 별도로 "동일 사용자·동일 과목 중복 작성"은 Route Handler에서
+  하드 리젝트(409)로 막는다. 컴포넌트는 `lib/api/reviews.ts` 파사드만 호출한다.
+  과목 상세 페이지의 리뷰/요약 영역은 `components/course-reviews-section.tsx`(클라이언트
+  컴포넌트)로 분리했다 — 서버 컴포넌트에서 상대경로 fetch를 쓰면 배포 환경 base URL 이슈가
+  있어 브라우저에서 직접 fetch하는 쪽을 택함.
+- **재생성 임계치**: PRD 8.1이 "신규 리뷰가 일정 수 누적되면"이라고만 하고 정확한 수치를
+  정하지 않아, MVP 기준으로 `REGENERATION_THRESHOLD = 3`(마지막 생성 이후 리뷰 3개 누적 시
+  재생성)으로 정했다(`lib/reviews/summary.ts`). 튜닝 필요 시 이 상수만 조정하면 됨.
+- **호불호 판정**: LLM이 "호불호가 갈리는 강의" 문구를 프롬프트에서 지시받아 포함하도록
+  했지만, 이것만 믿지 않고 서버에서 평점 표준편차 + 저평점/고평점 비율로 `isPolarized()`를
+  직접 계산해 UI 배지로도 별도 노출한다(`AiSummaryCard`의 `polarized` prop) — LLM이 문구를
+  빠뜨려도 UI 차원에서 보장되도록 이중화.
+- **라이브 DB 검증 필요(DB 미프로비저닝으로 이번 세션에서 확인 불가)**:
+  - `npm run db:seed` 실행 후 `courses` 5행이 기대한 id로 들어가는지.
+  - `app/api/reviews` POST → `after()` 콜백에서 `maybeRegenerateSummary`가 실제로 실행되고
+    `summaries` upsert(insert/update 분기)가 의도대로 동작하는지 — 특히 Neon HTTP 드라이버
+    환경에서 `after()`가 서버리스 함수 종료 전 완료를 보장하는지(Vercel Fluid Compute 기준
+    문서상 보장되지만 실 배포에서 재확인 권장).
+  - `predefinedReviewTags` 밖 해시태그를 걸러내는 필터링, 리뷰 중복 작성 409 응답,
+    어뷰징 플래그(`flagged`) 계산이 실제 여러 리뷰 누적 상황에서 기대대로 동작하는지.
+  - AI 해시태그 추천/요약 생성 호출이 Vercel AI Gateway(OIDC)로 실제로 라우팅되는지, 그리고
+    Haiku/Sonnet 모델 슬러그(`lib/ai.ts`)가 여전히 유효한지.
 
 ---
 
