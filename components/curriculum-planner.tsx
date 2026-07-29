@@ -204,6 +204,7 @@ export function CurriculumPlanner() {
                       key={id}
                       type="button"
                       onClick={() => toggleCompleted(id)}
+                      aria-pressed={checked}
                       className={cn(
                         "rounded-full border px-3 py-1.5 text-xs font-medium transition",
                         checked
@@ -242,6 +243,7 @@ export function CurriculumPlanner() {
                     key={field}
                     type="button"
                     onClick={() => toggleField(field)}
+                    aria-pressed={selected}
                     className={cn(
                       "rounded-full border px-3 py-1.5 text-xs font-medium transition",
                       selected
@@ -429,6 +431,7 @@ export function CurriculumPlanner() {
                   key={sem.label}
                   type="button"
                   onClick={() => setActiveTab(i)}
+                  aria-current={activeTab === i ? "true" : undefined}
                   className={cn(
                     "rounded-full border px-4 py-2 text-sm font-semibold transition",
                     activeTab === i

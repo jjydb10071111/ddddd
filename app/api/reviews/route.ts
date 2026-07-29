@@ -155,7 +155,11 @@ export async function POST(request: Request) {
       try {
         await maybeRegenerateSummary(courseId);
       } catch (err) {
-        console.error("Summary regeneration failed:", err);
+        // 원본 Error 객체를 그대로 넘기면 dev 서버(Turbopack)가 스택트레이스 코드프레임을
+        // 렌더링하다 한글(멀티바이트 UTF-8) 소스 문자열 경계에서 패닉해 전체 프로세스가 죽는
+        // 것을 확인했다(app/api/reviews/suggest-tags/route.ts와 동일한 문제, Sprint 5 QA) —
+        // 메시지 문자열만 로깅해 회피.
+        console.error("Summary regeneration failed:", err instanceof Error ? err.message : String(err));
       }
     });
 

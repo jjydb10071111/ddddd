@@ -49,7 +49,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, tags });
   } catch (err) {
-    console.error("Suggest tags API error:", err);
+    // 원본 Error 객체를 그대로 넘기면(특히 AI Gateway 미인증 403처럼 흔히 발생하는 에러) 개발 서버
+    // (Turbopack)가 스택트레이스 코드프레임을 렌더링하다 한글(멀티바이트 UTF-8) 소스 문자열 경계에서
+    // 패닉해 전체 dev 서버가 죽는 것을 확인했다(Sprint 5 QA에서 재현) — 메시지 문자열만 로깅해 회피.
+    console.error("Suggest tags API error:", err instanceof Error ? err.message : String(err));
     return NextResponse.json(
       { success: false, tags: [], message: "태그 추천 중 오류가 발생했습니다." },
       { status: 500 },

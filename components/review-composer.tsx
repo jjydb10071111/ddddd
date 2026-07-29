@@ -29,8 +29,12 @@ export function ReviewComposer({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const triggerButtonRef = useRef<HTMLButtonElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
 
-  // 모달 열림 시 배경 스크롤 방지 + ESC 닫기
+  // 모달 열림 시 배경 스크롤 방지 + ESC 닫기 + 포커스를 다이얼로그 안으로 이동, 닫히면
+  // 모달을 열었던 버튼으로 포커스를 되돌린다(키보드/스크린리더 사용자가 다이얼로그 밖으로
+  // 벗어나지 않도록).
   useEffect(() => {
     if (!open) return
     function onKey(e: KeyboardEvent) {
@@ -38,9 +42,11 @@ export function ReviewComposer({
     }
     document.addEventListener("keydown", onKey)
     document.body.style.overflow = "hidden"
+    dialogRef.current?.focus()
     return () => {
       document.removeEventListener("keydown", onKey)
       document.body.style.overflow = ""
+      triggerButtonRef.current?.focus()
     }
   }, [open])
 
@@ -121,6 +127,7 @@ export function ReviewComposer({
   return (
     <>
       <button
+        ref={triggerButtonRef}
         type="button"
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
@@ -135,11 +142,13 @@ export function ReviewComposer({
           onClick={() => setOpen(false)}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label="수강평 작성"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[90svh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-card p-6 shadow-xl sm:rounded-2xl"
+            className="max-h-[90svh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-card p-6 shadow-xl outline-none sm:rounded-2xl"
           >
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold text-foreground">
@@ -222,6 +231,7 @@ export function ReviewComposer({
                       key={tag}
                       type="button"
                       onClick={() => toggleTag(tag)}
+                      aria-pressed={selected}
                       className={cn(
                         "rounded-full border px-3 py-1.5 text-sm font-medium transition",
                         selected
@@ -252,6 +262,7 @@ export function ReviewComposer({
                         key={tag}
                         type="button"
                         onClick={() => toggleTag(tag)}
+                        aria-pressed={selected}
                         className={cn(
                           "rounded-full border border-dashed px-3 py-1.5 text-sm font-medium transition",
                           selected

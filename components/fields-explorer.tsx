@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import {
+  AlertCircle,
   BrainCircuit,
   ChevronDown,
   Clapperboard,
@@ -34,26 +35,40 @@ export function FieldsExplorer() {
   const { user } = useAuth()
   const [tags, setTags] = useState<IndustryTagListItem[]>([])
   const [tagsLoading, setTagsLoading] = useState(true)
+  const [tagsError, setTagsError] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
   const [results, setResults] = useState<Record<string, IndustrySearchResult | undefined>>({})
   const [resultsLoading, setResultsLoading] = useState<string | null>(null)
 
-  useEffect(() => {
+  function loadTags() {
     let cancelled = false
+    setTagsLoading(true)
+    setTagsError(null)
     listIndustryTags().then((res) => {
       if (cancelled) return
-      setTags(res.tags)
+      if (!res.success) {
+        setTagsError(res.message ?? "산업/진로 분야를 불러오지 못했습니다.")
+        setTags([])
+      } else {
+        setTags(res.tags)
+      }
       setTagsLoading(false)
     })
     return () => {
       cancelled = true
     }
+  }
+
+  useEffect(() => {
+    return loadTags()
+     
   }, [])
 
   async function handleToggle(tag: IndustryTagListItem) {
     const nextOpen = openId === tag.id ? null : tag.id
     setOpenId(nextOpen)
-    if (nextOpen && !results[tag.name]) {
+    // 실패한 결과는 캐시하지 않는다 — 다시 펼치면 재시도되도록 한다.
+    if (nextOpen && !results[tag.name]?.success) {
       setResultsLoading(tag.name)
       const res = await searchByIndustryTag(tag.name, user?.department)
       setResults((prev) => ({ ...prev, [tag.name]: res }))
@@ -63,6 +78,22 @@ export function FieldsExplorer() {
 
   if (tagsLoading) {
     return <p className="text-sm text-muted-foreground">산업/진로 분야를 불러오는 중입니다...</p>
+  }
+
+  if (tagsError) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+        <AlertCircle className="size-6 text-destructive" aria-hidden="true" />
+        <p className="text-sm font-medium text-destructive">{tagsError}</p>
+        <button
+          type="button"
+          onClick={loadTags}
+          className="rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-foreground transition hover:bg-secondary"
+        >
+          다시 시도
+        </button>
+      </div>
+    )
   }
 
   if (tags.length === 0) {
@@ -147,6 +178,16 @@ function FieldResultSections({
   result: IndustrySearchResult
   hasDepartment: boolean
 }) {
+  // 통신 실패 등 실제 오류는 "연관 과목 없음"과 구분해서 보여준다 — 그렇지 않으면 서버 에러가
+  // "이 분야엔 과목이 없다"는 잘못된 정보로 사용자에게 전달된다.
+  if (!result.success) {
+    return (
+      <p className="text-sm font-medium text-destructive">
+        {result.message ?? "과목을 불러오지 못했습니다. 다시 시도해주세요."}
+      </p>
+    )
+  }
+
   if (result.myMajorCourses.length === 0 && result.otherMajorCourses.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">

@@ -165,6 +165,7 @@ export function SearchResults() {
               key={opt.key}
               type="button"
               onClick={() => setSort(opt.key)}
+              aria-pressed={sort === opt.key}
               className={
                 sort === opt.key
                   ? "rounded-full bg-card px-3 py-1.5 text-sm font-semibold text-primary shadow-sm"
