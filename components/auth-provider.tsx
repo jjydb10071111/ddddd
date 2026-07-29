@@ -1,12 +1,21 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { getCurrentUser, login as apiLogin, logout as apiLogout, User, LoginInput } from "@/lib/api/auth";
+import {
+  getCurrentUser,
+  login as apiLogin,
+  logout as apiLogout,
+  register as apiRegister,
+  User,
+  LoginInput,
+  RegisterInput,
+} from "@/lib/api/auth";
 
 type AuthContextType = {
   user: User | null;
   isLoading: boolean;
   login: (input: LoginInput) => Promise<{ success: boolean; message?: string }>;
+  register: (input: RegisterInput) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 };
@@ -15,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
   login: async () => ({ success: false }),
+  register: async () => ({ success: false }),
   logout: async () => {},
   refreshUser: async () => {},
 });
@@ -50,13 +60,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return result;
   };
 
+  const register = async (input: RegisterInput) => {
+    const result = await apiRegister(input);
+    if (result.success && result.user) {
+      setUser(result.user);
+    }
+    return result;
+  };
+
   const logout = async () => {
     await apiLogout();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

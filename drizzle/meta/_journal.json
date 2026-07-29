@@ -43,6 +43,13 @@
       "when": 1785312929424,
       "tag": "0005_round_randall_flagg",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1785314011587,
+      "tag": "0006_wise_luminals",
+      "breakpoints": true
     }
   ]
 }

@@ -26,12 +26,15 @@ import {
 } from "drizzle-orm/pg-core";
 
 // 사용자 (User) — 개인정보 최소 수집 원칙: 이름/비밀번호 외의 식별 정보는 두지 않는다.
-// email만 예외 — 재학생 확인(학교 도메인 이메일) 용도로 가입 시 수집한다.
+// email/phoneNumber만 예외 — 회원가입(app/api/auth/register)에서 재학생 확인·연락 용도로 수집한다.
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   studentId: text("student_id").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  email: text("email").unique(), // 학교 메일 — 신규 가입(첫 로그인) 시에만 필수, 기존 계정은 null 허용
+  email: text("email").unique(), // 학교 메일 — 회원가입 시 필수, 그 이전에 만들어진 계정은 null 허용
+  phoneNumber: text("phone_number").unique(), // 휴대폰 번호 — 회원가입 시 필수, 이전 계정은 null 허용
+  // 개인정보 이용 동의 시각 — 회원가입 시 필수로 기록. null이면 동의 이력 없는(이 기능 이전) 계정.
+  privacyConsentedAt: timestamp("privacy_consented_at", { withTimezone: true }),
   name: text("name").notNull(),
   department: text("department").notNull(),
   secondDepartment: text("second_department"), // 복수전공

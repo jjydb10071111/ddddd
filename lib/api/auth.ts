@@ -11,8 +11,6 @@ export type User = {
 export type LoginInput = {
   studentId: string;
   password: string;
-  /** 신규 가입(첫 로그인)에만 필요 — 기존 계정 로그인 시에는 무시된다. */
-  schoolEmail?: string;
 };
 
 export type LoginResult = {
@@ -31,7 +29,30 @@ export async function login(input: LoginInput): Promise<LoginResult> {
     const data = await res.json();
     return data;
   } catch (err) {
-    console.error("Login request failed:", err);
+    console.error("Login request failed:", err instanceof Error ? err.message : String(err));
+    return { success: false, message: "서버와의 통신에 실패했습니다." };
+  }
+}
+
+export type RegisterInput = {
+  studentId: string;
+  password: string;
+  schoolEmail: string;
+  phoneNumber: string;
+  privacyConsent: boolean;
+};
+
+export async function register(input: RegisterInput): Promise<LoginResult> {
+  try {
+    const res = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error("Register request failed:", err instanceof Error ? err.message : String(err));
     return { success: false, message: "서버와의 통신에 실패했습니다." };
   }
 }
