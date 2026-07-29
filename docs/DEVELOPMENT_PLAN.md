@@ -39,20 +39,22 @@
 **목표**: PRD 10장의 목표 아키텍처(Next.js + Neon + Vercel + LLM API)를 실제로 연결한다. 이후 스프린트의 F1~F4 작업이 전부 이 위에서 진행된다.
 
 - [x] ORM 선정 (Prisma vs Drizzle) — PRD 14장 오픈 이슈. `neon-db-schema` 에이전트와 상의해 결정하고 이 문서에 결정 사유를 기록
-- [ ] Neon 프로젝트 생성, `DATABASE_URL` 등 환경변수 설정 (로컬 `.env.local` + Vercel 프로젝트 환경변수) — **Vercel 계정 인증 대기 중** (아래 메모)
+- [x] Neon 프로젝트 생성, `DATABASE_URL` 등 환경변수 설정 (로컬 `.env.local` + Vercel 프로젝트 환경변수) — `vercel link` + `vercel integration add neon`으로 provisioning 완료
 - [x] Neon 서버리스 드라이버 기반 DB 커넥션 모듈 작성 (`lib/db.ts` 등) — PRD 10.4의 커넥션 오버헤드 주의사항 반영
 - [x] PRD 9장 7개 핵심 엔티티(Course, Field Tag, Industry Tag, Review, Summary, User, Curriculum) 스키마 마이그레이션 작성
-- [ ] pgvector 확장 활성화 (F3/F4 임베딩 유사도 검색에 필요 — 인덱스는 데이터가 쌓인 뒤에 추가) — 마이그레이션 SQL에 `CREATE EXTENSION IF NOT EXISTS vector`는 포함, 실제 적용은 DB 연결 후
+- [x] pgvector 확장 활성화 (F3/F4 임베딩 유사도 검색에 필요 — 인덱스는 데이터가 쌓인 뒤에 추가) — `npx drizzle-kit migrate`로 실제 Neon에 적용 완료(`CREATE EXTENSION IF NOT EXISTS vector` 포함)
 - [x] LLM API 벤더 선정 — PRD 14장 오픈 이슈. `vercel:ai-sdk`/`vercel:ai-gateway` 스킬 활용해 클라이언트 셋업
-- [x] 기존 mock 인증을 실제 User 테이블 기반으로 교체 (세션 쿠키 발급 로직은 유지, 사용자 조회/생성만 DB로) — 코드 완료, 실제 DB 연결 후 동작 검증 필요
-- [ ] Vercel 프리뷰 배포 + Neon 브랜칭 연동 확인 (PRD 10.4 — 배포마다 격리된 DB 브랜치)
+- [x] 기존 mock 인증을 실제 User 테이블 기반으로 교체 (세션 쿠키 발급 로직은 유지, 사용자 조회/생성만 DB로) — 실제 Neon 대상으로 로그인 흐름 검증 완료(아래 메모)
+- [ ] Vercel 프리뷰 배포 + Neon 브랜칭 연동 확인 (PRD 10.4 — 배포마다 격리된 DB 브랜치) — 아직 실제 배포(`vercel deploy`)는 안 함, 로컬 `next dev` 기준으로만 검증
 
 **메모**:
 
 - **ORM: Drizzle 채택.** Neon 서버리스 드라이버와의 궁합, 가벼운 콜드스타트, SQL에 가까운 타입 추론이 Vercel Functions(서버리스) 환경에 더 적합하다고 판단. 스키마는 `lib/db/schema.ts`, 커넥션은 `lib/db/index.ts`(`drizzle-orm/neon-http` + `@neondatabase/serverless`), 마이그레이션 설정은 `drizzle.config.ts`/`drizzle/`.
 - **LLM 벤더: Vercel AI Gateway 채택.** `ai` 패키지에 `provider/model` 문자열(`lib/ai.ts`의 `AI_MODELS`)을 그대로 넘겨 라우팅 — 프로바이더 SDK를 직접 설치하지 않는다. 인증은 OIDC 기본값(`vercel env pull` → `VERCEL_OIDC_TOKEN`). 단, **임베딩(F3)은 게이트웨이 미지원이라 direct provider SDK가 별도로 필요** — Sprint 3에서 재검토.
-- **Neon 프로젝트 생성 / Vercel 프리뷰-Neon 브랜칭 연동**: 이 저장소가 아직 Vercel 프로젝트에 link되어 있지 않고(`vercel link` 미실행), CLI 인증도 안 되어 있어 브라우저 인증이 필요하다. `vercel integration add neon`으로 마켓플레이스를 통해 provisioning할 예정 — 사용자 인증 완료 후 이어서 진행.
+- **Neon 프로젝트 생성 완료**: `vercel link`로 Vercel 프로젝트(`sprint0-infra`)를 새로 만들고, `vercel integration add neon`으로 Neon 프로젝트(`neon-charcoal-plank`)를 provisioning해 연결했다. `vercel env pull`로 `.env.local`에 `DATABASE_URL` 등 자동 주입 확인. `npx drizzle-kit migrate`로 9개 테이블 + pgvector 확장까지 실제 적용 완료.
+- **AI Gateway는 카드 등록 전까지 호출 불가**: 무료 크레딧이라도 Vercel 계정에 신용카드 등록이 선행 조건("AI Gateway requires a valid credit card on file")이라, 이번 세션에서는 AI 해시태그 추천/요약 생성 API 자체는 실제로 호출 검증하지 못했다. 나머지 파이프라인(리뷰 CRUD, 어뷰징 필터링, 해시태그 빈도 계산)은 아래 Sprint 1 메모에 정리된 대로 실제 Neon 대상으로 전부 검증 완료. 카드 등록 후 `GET /api/reviews/summary/[courseId]`로 후속 검증 필요.
 - PRD 9장 엔티티 스키마의 `requirement`(이수구분) 컬럼은 mock-data(교양)와 curriculum-data(계열공통/기초필수) 값 집합이 달라 DB에서는 `text`로 느슨하게 두고, 정적 데이터를 이 스키마로 옮기는 이관 스크립트는 Sprint 3/4(실제 태그/커리큘럼 데이터 확보 이후)로 미룸.
+- `vercel integration add neon`이 부수효과로 이 저장소의 커스텀 `.claude/skills/neon-postgres/SKILL.md`를 Neon 공식 업스트림 스킬로 덮어쓰고 `.agents/`/`skills-lock.json`을 새로 만들었다 — 원래 파일로 복원하고 새로 생긴 파일은 삭제했다. Neon 통합을 다시 설치/업데이트할 일이 있으면 이 부수효과를 다시 확인할 것.
 
 ---
 
@@ -106,16 +108,20 @@
   했지만, 이것만 믿지 않고 서버에서 평점 표준편차 + 저평점/고평점 비율로 `isPolarized()`를
   직접 계산해 UI 배지로도 별도 노출한다(`AiSummaryCard`의 `polarized` prop) — LLM이 문구를
   빠뜨려도 UI 차원에서 보장되도록 이중화.
-- **라이브 DB 검증 필요(DB 미프로비저닝으로 이번 세션에서 확인 불가)**:
-  - `npm run db:seed` 실행 후 `courses` 5행이 기대한 id로 들어가는지.
-  - `app/api/reviews` POST → `after()` 콜백에서 `maybeRegenerateSummary`가 실제로 실행되고
-    `summaries` upsert(insert/update 분기)가 의도대로 동작하는지 — 특히 Neon HTTP 드라이버
-    환경에서 `after()`가 서버리스 함수 종료 전 완료를 보장하는지(Vercel Fluid Compute 기준
-    문서상 보장되지만 실 배포에서 재확인 권장).
-  - `predefinedReviewTags` 밖 해시태그를 걸러내는 필터링, 리뷰 중복 작성 409 응답,
-    어뷰징 플래그(`flagged`) 계산이 실제 여러 리뷰 누적 상황에서 기대대로 동작하는지.
-  - AI 해시태그 추천/요약 생성 호출이 Vercel AI Gateway(OIDC)로 실제로 라우팅되는지, 그리고
-    Haiku/Sonnet 모델 슬러그(`lib/ai.ts`)가 여전히 유효한지.
+- **라이브 DB 검증 완료 (Neon provisioning 이후, 로컬 `next dev` 기준)**:
+  - `npm run db:seed` → `courses` 5행이 `mock-data.ts`의 id 그대로 정상 삽입됨.
+  - 로그인(`/api/auth/login`) → `users` upsert 정상 동작, 같은 학번 재로그인 시 비밀번호
+    해시 검증도 확인.
+  - 리뷰 5건을 실제로 등록(`POST /api/reviews`)해 `predefinedReviewTags` 밖 문자열은
+    걸러지고 정확히 일치하는 해시태그만 저장되는 것, 해시태그 언급 빈도(%) 계산이
+    누적 리뷰 기준으로 정확히 나오는 것(예: 2/4건 → 50%)을 확인.
+  - 5번째 리뷰 등록 시점에 `GET /api/reviews/summary/[courseId]`가 `status: "pending"`으로
+    전환되는 것까지 확인 — 즉 임계치 감지 로직 자체는 정상 동작.
+  - **AI 호출 자체는 미검증**: Vercel AI Gateway가 무료 크레딧이라도 계정에 카드 등록을
+    요구해서(`AI Gateway requires a valid credit card on file`) 해시태그 추천/요약 생성
+    LLM 호출은 403으로 실패했다. 다만 이 실패가 리뷰 저장 자체를 깨뜨리지 않고 `pending`
+    상태로 안전하게 남는 것은 확인했다(에러 핸들링 정상). 카드 등록 후 동일 엔드포인트로
+    재검증 필요.
 
 ---
 

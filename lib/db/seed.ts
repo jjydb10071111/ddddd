@@ -7,13 +7,20 @@
 // courses 테이블에 시드해 F1이 진짜 FK를 가질 수 있게 하는 임시 다리 역할을 한다.
 // Sprint 2에서 과목 카탈로그가 통합되면 이 스크립트는 폐기 대상이다.
 //
-// 실행: `npm run db:seed` (Neon 프로젝트 연결 + .env.local에 DATABASE_URL 필요 — 지금은
-// DB가 아직 프로비저닝되지 않아 실행하면 lib/db/index.ts에서 즉시 에러가 난다. 이 파일
-// 자체는 DB가 연결된 뒤 실행 검증이 필요하다).
+// 실행: `npm run db:seed` (Neon 프로젝트 연결 + .env.local에 DATABASE_URL 필요).
 
-import "dotenv/config";
-import { db, schema } from "./index";
+// 이 스크립트는 tsx로 Next.js 바깥에서 직접 실행되므로 lib/db/index.ts를 재사용하지 않는다 —
+// 그 모듈은 "server-only"를 import하는데, 이 가드는 Next.js 번들러가 서버 컴포넌트 빌드에서만
+// 무력화해주는 조건부 트릭이라 일반 node/tsx 실행에서는 항상 throw한다.
+import { config } from "dotenv";
+import { neon } from "@neondatabase/serverless";
+
+config({ path: ".env.local" });
+import { drizzle } from "drizzle-orm/neon-http";
+import * as schema from "./schema";
 import { mockCourses } from "../mock-data";
+
+const db = drizzle(neon(process.env.DATABASE_URL!), { schema });
 
 async function main() {
   let inserted = 0;
