@@ -5,11 +5,14 @@ export type User = {
   name: string;
   studentId: string;
   department?: string;
+  email?: string;
 };
 
 export type LoginInput = {
   studentId: string;
   password: string;
+  /** 신규 가입(첫 로그인)에만 필요 — 기존 계정 로그인 시에는 무시된다. */
+  schoolEmail?: string;
 };
 
 export type LoginResult = {

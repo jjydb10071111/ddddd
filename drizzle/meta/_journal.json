@@ -29,6 +29,13 @@
       "when": 1785309285000,
       "tag": "0003_chubby_arachne",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785312554102,
+      "tag": "0004_handy_mimic",
+      "breakpoints": true
     }
   ]
 }

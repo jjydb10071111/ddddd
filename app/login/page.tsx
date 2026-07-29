@@ -15,6 +15,7 @@ export default function LoginPage() {
   const { login: authLogin } = useAuth()
   const [studentId, setStudentId] = useState("")
   const [password, setPassword] = useState("")
+  const [schoolEmail, setSchoolEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false)
@@ -24,7 +25,7 @@ export default function LoginPage() {
     setError(null)
     setIsSubmitting(true)
 
-    const result = await authLogin({ studentId, password })
+    const result = await authLogin({ studentId, password, schoolEmail: schoolEmail || undefined })
 
     setIsSubmitting(false)
 
@@ -105,6 +106,24 @@ export default function LoginPage() {
               placeholder="비밀번호를 입력하세요"
               className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="schoolEmail" className="text-sm font-medium text-foreground">
+              학교 이메일 <span className="font-normal text-muted-foreground">(처음 로그인 시 필수)</span>
+            </label>
+            <input
+              id="schoolEmail"
+              type="email"
+              autoComplete="email"
+              value={schoolEmail}
+              onChange={(e) => setSchoolEmail(e.target.value)}
+              placeholder="예: student@jbnu.ac.kr"
+              className="h-10 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/25"
+            />
+            <p className="text-xs text-muted-foreground">
+              재학생 확인을 위해 처음 로그인할 때만 학교 이메일(.ac.kr)이 필요해요. 이미 계정이 있다면 비워두세요.
+            </p>
           </div>
 
           {error ? (

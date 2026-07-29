@@ -8,7 +8,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { studentId, password } = body ?? {};
+    const { studentId, password, schoolEmail } = body ?? {};
 
     if (!studentId || typeof studentId !== "string" || !/^\d{6,10}$/.test(studentId)) {
       return NextResponse.json(
@@ -37,7 +37,27 @@ export async function POST(request: Request) {
       }
       record = existing;
     } else {
-      // 첫 로그인 시 계정을 자동 생성한다(가입 절차 없음 — 기존 데모 동작과 동일한 UX 유지).
+      // 첫 로그인 시 계정을 자동 생성한다(별도 가입 페이지 없이 로그인 폼에서 바로 가입).
+      // 재학생 확인 용도로 학교 메일(.ac.kr)만 필수로 받는다 — 기존 계정에는 없어도 된다.
+      if (
+        !schoolEmail ||
+        typeof schoolEmail !== "string" ||
+        !/^[^\s@]+@[^\s@]+\.ac\.kr$/i.test(schoolEmail)
+      ) {
+        return NextResponse.json(
+          { success: false, message: "처음 로그인하시는 경우, 학교 이메일(.ac.kr)을 입력해주세요." },
+          { status: 400 }
+        );
+      }
+
+      const [emailTaken] = await db.select().from(users).where(eq(users.email, schoolEmail)).limit(1);
+      if (emailTaken) {
+        return NextResponse.json(
+          { success: false, message: "이미 다른 학번으로 등록된 학교 이메일입니다." },
+          { status: 409 }
+        );
+      }
+
       const passwordHash = await hashPassword(password);
       const isSeedDemoUser = studentId === "202012345";
       const [created] = await db
@@ -45,6 +65,7 @@ export async function POST(request: Request) {
         .values({
           studentId,
           passwordHash,
+          email: schoolEmail,
           name: isSeedDemoUser ? "김수강" : `${studentId} 학우`,
           department: isSeedDemoUser ? "컴퓨터공학과" : "인공지능학과",
         })
@@ -57,6 +78,7 @@ export async function POST(request: Request) {
       name: record.name,
       studentId: record.studentId,
       department: record.department,
+      email: record.email ?? undefined,
     };
 
     const sessionPayload = JSON.stringify(user);
