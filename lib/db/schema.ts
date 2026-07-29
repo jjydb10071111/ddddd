@@ -53,6 +53,12 @@ export const courses = pgTable("courses", {
   requirement: text("requirement").notNull(), // 전공필수/전공선택/계열공통/기초필수/교양
   syllabus: text("syllabus"),
   semester: text("semester"), // 개설학기, 예: "2026-2"
+  // 나의 시간표용 — 원본 강좌(분반) 데이터의 요일/교시 문자열을 그대로 저장(예: "월 1-A,월 1-B").
+  // 과목이 여러 분반으로 개설된 경우 이 값은 그 중 하나(첫 분반)의 시간표다 — 분반별로 시간이
+  // 다를 수 있다는 한계가 있다(lib/db/backfill-course-schedule.ts 주석 참고). mock-data 5과목은
+  // 원본에 시간표가 없어 항상 null.
+  schedule: text("schedule"),
+  room: text("room"),
   prerequisites: jsonb("prerequisites").$type<string[]>().notNull().default([]),
   // F3 임베딩 유사도 검색용 — 과목 설명/키워드를 벡터화. 값이 쌓이기 전까지는 null.
   embedding: vector("embedding", { dimensions: 1536 }),
@@ -156,6 +162,25 @@ export const summaries = pgTable("summaries", {
   generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// 장바구니 (Cart) — 담은 과목 목록. "나의 시간표"는 이 목록에서 스케줄이 있는 과목만 그린다.
+export const cartItems = pgTable(
+  "cart_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    courseId: text("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("cart_items_user_course_idx").on(t.userId, t.courseId),
+    index("cart_items_user_idx").on(t.userId),
+  ],
+);
+
 // 학과 커리큘럼 (Curriculum) — 입학년도별 버전 관리.
 export const curricula = pgTable(
   "curricula",
@@ -173,6 +198,7 @@ export const curricula = pgTable(
 
 export const usersRelations = relations(users, ({ many }) => ({
   reviews: many(reviews),
+  cartItems: many(cartItems),
 }));
 
 export const coursesRelations = relations(courses, ({ many, one }) => ({
@@ -180,6 +206,12 @@ export const coursesRelations = relations(courses, ({ many, one }) => ({
   summary: one(summaries, { fields: [courses.id], references: [summaries.courseId] }),
   fieldTags: many(courseFieldTags),
   industryTags: many(courseIndustryTags),
+  cartItems: many(cartItems),
+}));
+
+export const cartItemsRelations = relations(cartItems, ({ one }) => ({
+  user: one(users, { fields: [cartItems.userId], references: [users.id] }),
+  course: one(courses, { fields: [cartItems.courseId], references: [courses.id] }),
 }));
 
 export const reviewsRelations = relations(reviews, ({ one }) => ({

@@ -5,13 +5,30 @@ import type React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Compass, LogIn, LogOut, Search, Sparkles, User as UserIcon } from "lucide-react"
+import {
+  CalendarDays,
+  Compass,
+  LogIn,
+  LogOut,
+  MessageSquareText,
+  Search,
+  ShoppingCart,
+  Sparkles,
+  User as UserIcon,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/auth-provider"
 
 const navLinks = [
   { href: "/fields", label: "분야로 찾기", icon: Compass },
-  { href: "/curriculum", label: "커리큘럼 설계", icon: Sparkles },
+  { href: "/curriculum", label: "AI 커리큘럼", icon: Sparkles },
+]
+
+// 로그인 후에만 보이는 개인화 메뉴.
+const authedNavLinks = [
+  { href: "/", label: "강의평 보기", icon: MessageSquareText },
+  { href: "/timetable", label: "나의 시간표", icon: CalendarDays },
+  { href: "/cart", label: "장바구니", icon: ShoppingCart },
 ]
 
 export function SiteHeader() {
@@ -75,7 +92,7 @@ export function SiteHeader() {
         </form>
 
         <nav className="ml-auto flex items-center gap-1.5 md:ml-0">
-          {navLinks.map((link) => {
+          {[...navLinks, ...(!isLoading && user ? authedNavLinks : [])].map((link) => {
             const active = pathname === link.href
             const Icon = link.icon
             return (

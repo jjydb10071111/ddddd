@@ -2,6 +2,7 @@ import Link from "next/link"
 import { ChevronRight } from "lucide-react"
 import type { Course } from "@/lib/mock-data"
 import { HashtagBadge, RatingStars, RequirementBadge } from "@/components/course-badges"
+import { AddToCartButton } from "@/components/add-to-cart-button"
 
 export function CourseCard({
   course,
@@ -54,10 +55,13 @@ export function CourseCard({
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-1.5">
-        {course.hashtags.slice(0, 2).map((h) => (
-          <HashtagBadge key={h.tag} tag={h.tag} percent={h.percent} />
-        ))}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
+          {course.hashtags.slice(0, 2).map((h) => (
+            <HashtagBadge key={h.tag} tag={h.tag} percent={h.percent} />
+          ))}
+        </div>
+        <AddToCartButton courseId={course.id} />
       </div>
     </Link>
   )
