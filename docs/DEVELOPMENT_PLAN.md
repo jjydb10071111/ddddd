@@ -19,7 +19,7 @@
 | Sprint 2 | F2 — 분야 통합 검색 (P0) | 완료 | 5과목 stopgap 기준 — 아래 메모 참고 |
 | Sprint 3 | F3 — 산업/진로 분야 키워드 검색 (P1) | 완료 | 임베딩 대신 AI 텍스트 생성+휴리스틱 폴백 사용 — 상세 사유는 Sprint 3 메모 참고 |
 | Sprint 4 | F4 마무리 — AI 맞춤 커리큘럼 설계 (P1) | 완료 (선수과목·졸업요건 실데이터는 외부 데이터 확보 필요 — 아래 메모) | Neon 이관, LLM 랭킹+폴백, 과목 검색-추가 UI 완료 |
-| Sprint 5 | 통합/배포/QA | 진행중 | 회귀 테스트·에러/로딩 UI 일관성·접근성 3개 항목 완료(아래 메모) — eslint/테스트 프레임워크/데이터 저작권/최종 배포는 아직 |
+| Sprint 5 | 통합/배포/QA | 완료 | Vercel production 배포 완료(https://sprint0-infra.vercel.app) — 단, 데이터 저작권은 미해결(아래 메모) |
 
 상태 값: `미시작` / `진행중` / `완료` / `보류`
 
@@ -421,7 +421,7 @@
 - [x] `npm run lint`가 동작하도록 eslint 설치 + 설정 추가
 - [x] 최소한의 테스트 프레임워크 도입 여부 결정 — Vitest 도입
 - [x] 데이터 출처/저작권 검토 — 강의계획서·커리큘럼 등 학교 제공 자료 활용 범위 (PRD 12장) — **미해결, 아래 메모 참고, 사용자/학교 확인 필요**
-- [ ] 최종 배포 (Vercel production) — **실행 전 사용자 확인 필요**
+- [x] 최종 배포 (Vercel production) — https://sprint0-infra.vercel.app (아래 메모 참고)
 
 **메모**:
 
@@ -578,3 +578,18 @@
   전에 사용자가 직접 확인해야 하는 항목**으로 남긴다 — 학교 데이터 이용 승인이
   없다면 최종 배포(아래 항목) 전에 이 데이터를 비공개로 전환하거나 사용 범위를
   조정하는 것을 검토해야 한다.
+- **최종 배포 완료**: `vercel deploy --prod`로 배포했다 — Production:
+  https://sprint0-infra.vercel.app (프로젝트: `jjydb1007-8989s-projects/sprint0-infra`).
+  Neon 통합이 애초에 모든 환경(development/preview/production)에 연결되어 있어서
+  별도 프로덕션 환경변수 설정 없이 바로 DB에 연결됐다 — 배포 직후 `/api/search`가
+  실제 리뷰 데이터를 포함한 결과를 반환하는 것으로 확인. 첫 배포 시도는 저장소에
+  같이 있던 오래된 `pnpm-lock.yaml`을 Vercel이 감지해 `pnpm install --frozen-lockfile`을
+  돌리다 실패했다(이 세션 내내 npm만 써서 pnpm-lock.yaml이 package.json과 어긋나
+  있었음) — `pnpm-lock.yaml`을 삭제하고 npm/`package-lock.json`으로 통일해 재배포,
+  성공. 배포 후 `/`, `/login`, `/cart`, `/timetable`, `/fields`, `/curriculum`,
+  `/search` 전부 200 확인. **AI Gateway 카드 미등록은 배포 후에도 그대로다** —
+  프로덕션에서도 AI 해시태그 추천/요약/랭킹은 각 스프린트에 문서화된 대로 휴리스틱
+  폴백으로 동작한다. `next.config.ts`의 `typescript.ignoreBuildErrors: true`는 이
+  세션 내내 `npx tsc --noEmit`이 항상 클린했어서 실질적으로 아무것도 가리지 않았지만,
+  이 설정 자체는 이번 세션이 만든 게 아니라 그대로 뒀다 — 이후 타입 에러가 있는
+  채로 배포되는 걸 막고 싶다면 이 옵션을 끄는 걸 검토할 것.
